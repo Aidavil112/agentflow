@@ -19,6 +19,7 @@ export class NetworkClient {
     this.startAt = 0;
     this.duration = 90;
     this.seed = null;
+    this.city = "mumbai";
     this.serverOffset = 0;
   }
 
@@ -48,8 +49,8 @@ export class NetworkClient {
     return this.connected && !!this.room;
   }
 
-  connect({ name, room = "", create = false }) {
-    this.desired = { name, room: String(room || "").toUpperCase(), create };
+  connect({ name, room = "", create = false, city = "mumbai" }) {
+    this.desired = { name, room: String(room || "").toUpperCase(), create, city };
     this.manualClose = true;
     if (this.ws) {
       try { this.ws.close(); } catch { /* ignored */ }
@@ -94,17 +95,25 @@ export class NetworkClient {
           this.startAt = msg.startAt || 0;
           this.duration = msg.duration || 90;
           this.seed = msg.seed;
+          this.city = msg.city || this.city;
+          this.callbacks.onCity?.(this.city);
           this.serverOffset = (msg.serverTime || Date.now()) - Date.now();
           this.callbacks.onStatus?.(`Connected · Room ${msg.room}`, "connected");
           this.callbacks.onWelcome?.(msg);
           this.callbacks.onPlayers?.(this.players, this.hostId);
           break;
         }
-        case "players":
+        case "players": {
           this.players = msg.players || [];
           this.hostId = msg.hostId || this.hostId;
+          const host = this.players.find((player) => player.id === this.hostId);
+          if (host?.city && host.city !== this.city) {
+            this.city = host.city;
+            this.callbacks.onCity?.(this.city);
+          }
           this.callbacks.onPlayers?.(this.players, this.hostId);
           break;
+        }
         case "state":
           this.callbacks.onState?.(msg);
           break;
@@ -113,6 +122,8 @@ export class NetworkClient {
           this.startAt = msg.startAt;
           this.duration = msg.duration || 90;
           this.seed = msg.seed;
+          this.city = msg.city || this.city;
+          this.callbacks.onCity?.(this.city);
           this.hostId = msg.hostId || this.hostId;
           if (msg.players) this.players = msg.players;
           this.serverOffset = (msg.serverTime || Date.now()) - Date.now();
@@ -172,8 +183,9 @@ export class NetworkClient {
     }
   }
 
-  start(seed = Date.now()) {
-    return this.send({ type: "start", seed: seed >>> 0 });
+  start(seed = Date.now(), city = this.city) {
+    this.city = city || this.city;
+    return this.send({ type: "start", seed: seed >>> 0, city: this.city });
   }
 
   sendState(data) {
@@ -199,6 +211,7 @@ export class NetworkClient {
     this.room = null;
     this.hostId = null;
     this.players = [];
+    this.city = "mumbai";
     this.callbacks.onStatus?.("Not connected", "idle");
     this.callbacks.onPlayers?.([], null);
   }

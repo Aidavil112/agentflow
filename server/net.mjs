@@ -4,6 +4,14 @@ import { WebSocket, WebSocketServer } from "ws";
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const PLAYER_COLORS = ["#ff9f1c", "#20e3b2", "#ff4d6d", "#8b7cff", "#4cc9f0", "#f7d154"];
 const RUN_DURATION = 90;
+const CITY_IDS = new Set(["mumbai", "delhi", "gurugram", "india"]);
+const CITY_ALIASES = {
+  mumbai: "mumbai", bombay: "mumbai",
+  delhi: "delhi", dilli: "delhi", newdelhi: "delhi", ncr: "delhi",
+  guru: "gurugram", gurgaon: "gurugram", gurugram: "gurugram", cybercity: "gurugram",
+  india: "india", bharat: "india", ind: "india", tour: "india", highway: "india",
+  indiatour: "india", panindia: "india",
+};
 const OPEN = WebSocket.OPEN;
 const rooms = new Map();
 
@@ -25,6 +33,13 @@ function cleanName(value) {
     .slice(0, 14) || "RIDER";
 }
 
+function cleanCity(value, fallback = "mumbai") {
+  const key = String(value || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+  if (!key) return fallback;
+  if (CITY_IDS.has(key)) return key;
+  return CITY_ALIASES[key] || fallback;
+}
+
 function send(ws, payload) {
   if (ws.readyState === OPEN) ws.send(JSON.stringify(payload));
 }
@@ -38,6 +53,7 @@ function publicPlayers(room) {
     gates: client.gates || 0,
     alive: client.alive !== false,
     host: client.id === room.hostId,
+    city: client.city || room.city || "mumbai",
   }));
 }
 
@@ -62,6 +78,7 @@ function createRoom(host) {
     startAt: 0,
     duration: RUN_DURATION,
     seed: Math.floor(Math.random() * 1e9),
+    city: host.city || "mumbai",
     scoreboardTimer: null,
   };
   rooms.set(code, room);
@@ -92,7 +109,7 @@ function leave(ws) {
   ws.roomCode = null;
 }
 
-function startRun(ws, room, requestedSeed) {
+function startRun(ws, room, requestedSeed, requestedCity) {
   if (ws.id !== room.hostId) {
     send(ws, { type: "error", message: "Only the room host can start the run." });
     return;
@@ -101,6 +118,7 @@ function startRun(ws, room, requestedSeed) {
   room.duration = RUN_DURATION;
   room.startAt = now() + 1600;
   room.seed = Number.isFinite(Number(requestedSeed)) ? Math.floor(Number(requestedSeed)) : Math.floor(Math.random() * 1e9);
+  room.city = cleanCity(requestedCity, room.city);
   for (const client of room.clients.values()) {
     client.score = 0;
     client.gates = 0;
@@ -109,6 +127,7 @@ function startRun(ws, room, requestedSeed) {
   broadcast(room, {
     type: "start",
     seed: room.seed,
+    city: room.city,
     startAt: room.startAt,
     serverTime: now(),
     duration: room.duration,
@@ -149,6 +168,7 @@ export function attachNetwork(httpServer, { path = "/net" } = {}) {
       if (msg.type === "hello") {
         if (ws.roomCode) return;
         const requested = String(msg.room || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+        ws.city = cleanCity(msg.city);
         let room;
         if (msg.create || !requested) {
           room = createRoom(ws);
@@ -164,6 +184,7 @@ export function attachNetwork(httpServer, { path = "/net" } = {}) {
           if (!room.clients.size) disposeRoom(room.code);
           return;
         }
+        ws.city = room.city || cleanCity(msg.city);
         ws.name = cleanName(msg.name);
         ws.color = PLAYER_COLORS[room.clients.size % PLAYER_COLORS.length];
         ws.score = 0;
@@ -182,6 +203,7 @@ export function attachNetwork(httpServer, { path = "/net" } = {}) {
           startAt: room.startAt,
           serverTime: now(),
           seed: room.seed,
+          city: room.city,
           duration: room.duration,
         });
         broadcastPlayers(room);
@@ -189,6 +211,7 @@ export function attachNetwork(httpServer, { path = "/net" } = {}) {
           send(ws, {
             type: "start",
             seed: room.seed,
+            city: room.city,
             startAt: room.startAt,
             serverTime: now(),
             duration: room.duration,
@@ -229,7 +252,7 @@ export function attachNetwork(httpServer, { path = "/net" } = {}) {
           break;
         }
         case "start":
-          startRun(ws, room, msg.seed);
+          startRun(ws, room, msg.seed, msg.city);
           break;
         case "reset":
           if (ws.id === room.hostId) {

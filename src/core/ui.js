@@ -66,6 +66,12 @@ export class UI {
       installBtn: document.getElementById("install-btn"),
       qualityButtons: [...document.querySelectorAll(".quality-btn")],
       qualityStatus: document.getElementById("quality-status"),
+      cityButtons: [...document.querySelectorAll(".city-btn")],
+      cityStatus: document.getElementById("city-status"),
+      cityTagline: document.getElementById("city-tagline"),
+      hudCity: document.getElementById("hud-city"),
+      minimapCity: document.getElementById("minimap-city"),
+      connectCity: document.getElementById("connect-city"),
       landscapeBtn: document.getElementById("landscape-btn"),
       rotateBtn: document.getElementById("rotate-btn"),
       rotateOverlay: document.getElementById("rotate-overlay"),
@@ -116,6 +122,13 @@ export class UI {
       button.addEventListener("click", (event) => {
         event.preventDefault();
         g.setQualityPreset(button.dataset.quality);
+      });
+    }
+
+    for (const button of this.el.cityButtons) {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        g.setCity(button.dataset.city);
       });
     }
 
@@ -252,6 +265,21 @@ export class UI {
     if (this.el.qualityStatus && meta?.note) this.el.qualityStatus.textContent = meta.note;
   }
 
+  setCity(id, meta = null) {
+    for (const button of this.el.cityButtons) {
+      const selected = button.dataset.city === id;
+      button.classList.toggle("selected", selected);
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+    }
+    if (this.el.cityStatus && meta?.note) this.el.cityStatus.textContent = meta.note;
+    if (this.el.cityTagline && meta?.story) this.el.cityTagline.textContent = meta.story;
+    const label = meta?.hudLabel || meta?.label || "MUMBAI";
+    if (this.el.hudCity) this.el.hudCity.textContent = label;
+    if (this.el.minimapCity) this.el.minimapCity.textContent = label;
+    if (this.el.connectCity) this.el.connectCity.textContent = meta?.shortLabel || meta?.label || label;
+    document.documentElement.style.setProperty("--city-accent", meta?.accent || "#20e3b2");
+  }
+
   updateOrientation() {
     if (!this.el.rotateOverlay) return;
     const portraitTouch = this.orientationQuery.matches ||
@@ -293,8 +321,10 @@ export class UI {
     return this.el.inviteLink.value;
   }
 
-  updateConnect({ status, room, inviteUrl, players = [], hostId, selfId, connected, started }) {
+  updateConnect({ status, room, inviteUrl, players = [], hostId, selfId, connected, started, city = null }) {
+    const cityLabel = city?.shortLabel || city?.label || "MUMBAI";
     this.el.roomStatus.textContent = status || "Not connected";
+    if (this.el.connectCity) this.el.connectCity.textContent = city?.hudLabel || cityLabel;
     this.el.roomCodeDisplay.textContent = room || "----";
     this.el.inviteLink.value = inviteUrl || "";
     this.el.copyInviteBtn.disabled = !inviteUrl;
@@ -321,6 +351,7 @@ export class UI {
       this.el.connectStartBtn.textContent = "START SHARED RUN";
       this.el.connectHint.textContent = "The host starts a 90-second score attack. Up to 8 riders.";
     }
+    this.el.connectHint.textContent += ` · ${cityLabel} city`;
   }
 
   setRoomHud(room, players, selfId) {

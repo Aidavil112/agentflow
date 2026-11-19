@@ -29,6 +29,22 @@ function asColor(value) {
   return value?.isColor ? value.clone() : new THREE.Color(value || 0xffffff);
 }
 
+/** Mark a mesh as using cached/merged geometry and shared material, so World disposal will not free it. */
+function markExternalAsset(object) {
+  object.userData.externalAsset = true;
+  return object;
+}
+
+/** Mark a cloned GLB hierarchy: geometry is shared with the asset, but materials are per-clone. */
+function markClonedAsset(object) {
+  object.userData.externalAsset = true;
+  object.traverse((child) => {
+    child.userData.externalAsset = true;
+    if (child.isMesh) child.userData.cloneMaterial = true;
+  });
+  return object;
+}
+
 function cloneMaterials(object) {
   object.traverse((child) => {
     if (!child.isMesh) return;
@@ -127,7 +143,7 @@ export function makeMergedCar(asset, color) {
   mesh.castShadow = false;
   mesh.receiveShadow = true;
   mesh.frustumCulled = true;
-  return mesh;
+  return markExternalAsset(mesh);
 }
 
 function roundedRect(ctx, x, y, w, h, r) {
@@ -209,6 +225,8 @@ export function makeCharacter(asset, options = {}) {
   const { color = "#ff9f1c", tint = true, baseY = 0, scale = 1 } = options;
   const group = new THREE.Group();
   const model = cloneAsset(asset);
+  markClonedAsset(model);
+  group.userData.externalAsset = true;
   if (tint) tintAsset(model, color, "Body_Paint");
   group.add(model);
   group.scale.setScalar(scale);
@@ -262,7 +280,7 @@ export function makeCrowdMesh(asset, count, tint = 0xffffff) {
   mesh.castShadow = false;
   mesh.receiveShadow = true;
   mesh.frustumCulled = false;
-  return mesh;
+  return markExternalAsset(mesh);
 }
 
 function makeFallbackCharacter() {

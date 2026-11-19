@@ -1,8 +1,8 @@
-# Monsoon Drift · Mumbai Chai Rush
+# Monsoon Drift · India City Rush
 
-An original, India-inspired 3D open-world arcade driving game built for the browser. It takes the street-energy of a GTA-style city and rebuilds it as a cinematic, 60fps-friendly Mumbai-monsoon playground with Blender-authored characters, a live 3D rider preview, rainy streets, neon bloom, graphics presets, a widescreen horizon, landscape play, room-code multiplayer, and an installable PWA shell.
+An original, India-inspired 3D open-world arcade driving game built for the browser. It takes the street-energy of the open-world driving genre and rebuilds it as a cinematic, 60fps-friendly India city playground with four switchable maps — Mumbai, Delhi, Gurugram and India Tour — plus Blender-authored characters, a live 3D rider preview, city-specific weather and landmarks, neon bloom, four graphics presets, a widescreen horizon, landscape play, room-code multiplayer, and an installable PWA shell.
 
-> This is an original vertical slice, not a copy of GTA VI and not a GPU cloud-streaming service. It is a cloud-hostable WebGL game: once deployed to Render, anyone with the URL can play solo or join Connect Play rooms in their own browser.
+> This is an original vertical slice, not a copy of GTA VI and not a GPU cloud-streaming service. No GTA / Rockstar code, assets, maps, characters or proprietary files were reverse-engineered or copied — including for "development purpose". It is a cloud-hostable WebGL game: once deployed to Render, anyone with the URL can play solo or join Connect Play rooms in their own browser.
 
 ## Play
 
@@ -31,12 +31,14 @@ The preview server binds to `0.0.0.0:4173` by default and serves both the built 
 | Boost | `Shift` | `BOOST` |
 | Pause | `P` / `Esc` | Pause button |
 | Fullscreen / landscape | `F` | `LANDSCAPE / FULLSCREEN` button or rotate prompt |
+| Cycle city | `C` | city buttons on the start screen |
+| Select city | `1`–`4` | city buttons on the start screen |
 | Instant restart | `R`, `Enter` or `Space` on game over | Restart button |
 | Mute | `M` | Speaker buttons |
 
 ## Core loop
 
-- Pick one of five Blender-made riders on the start screen; the live 3D preview, hero-car paint and saved selection update instantly.
+- Pick one of four original India city maps and one of five Blender-made riders on the start screen; the live 3D preview, hero-car paint, city theme and saved selections update instantly.
 - Start moving immediately: the first chai cup and boost pad are placed seconds from spawn.
 - Thread through traffic for near-miss bonuses, chain cups and drifts to build an eight-step combo, and drive through glowing chai gates.
 - Solo gates add nine seconds; Connect Play uses a shared 90-second score-attack clock.
@@ -48,7 +50,7 @@ The preview server binds to `0.0.0.0:4173` by default and serves both the built 
 
 1. Create a room and copy the invite link.
 2. Open the link in another browser tab/device on the same server, or enter the four-letter code manually.
-3. The host starts a shared run. Up to eight riders appear as named, color-coded ghost cars and compete on the live HUD leaderboard.
+3. The host starts a shared run. Up to eight riders appear as named, color-coded ghost cars and compete on the live HUD leaderboard. The host's selected city is synced to every rider through the WebSocket `hello`, `players` and `start` messages; invite links also carry `?city=...`.
 
 The same WebSocket server is attached in `vite.config.js` for development and in `server.mjs` for the built preview. Room state is fully in-memory and disappears when the server restarts.
 
@@ -82,7 +84,7 @@ At runtime, traffic, crowd NPCs and remote-player vehicles are merged into singl
 - One shared particle `Points` buffer, one rain `LineSegments` buffer, and a cinematic `RenderPass → Bloom → SMAA → Color grade → Output` post-processing chain.
 - PMREM `RoomEnvironment` reflections for PBR car paint, metal, glass and wet clearcoat roads; distant instanced skyline and warm sun/horizon shader.
 - Merged vertex-color geometry for traffic and instanced crowds; only the hero car, menu rider and nearby pedestrians keep detailed node hierarchies.
-- Three graphics presets: `PERFORMANCE`, `BALANCED`, `CINEMATIC`; capped device pixel ratio, optional shadows, and automatic performance mode that disables bloom/SMAA/grade and lowers resolution if frame times slip.
+- Four graphics presets: `PERFORMANCE`, `BALANCED`, `CINEMATIC`, `ULTRA`; capped device pixel ratio, optional shadows, city-specific exposure/bloom/grade, and automatic performance mode that disables bloom/SMAA/grade and lowers resolution if frame times slip.
 - Delta-time clamped physics, no per-frame geometry allocation, and no external texture/font requests.
 - Service worker caches the app shell, icons, JS/CSS and GLBs for faster repeat loads and offline solo play. Connect Play still needs the live `/net` server.
 
@@ -104,6 +106,28 @@ Added in this build:
 - **What's new panel:** the start screen lists the graphics additions directly in the UI.
 
 On iPhone Safari, orientation auto-lock is not supported; the overlay asks the player to rotate manually. The game still runs in portrait, but the wide horizon and touch controls are designed for landscape.
+
+## City switching & ULTRA graphics
+
+> "Guru" is treated as **Gurugram / Gurgaon**. Every map below is an original procedural theme; none is a copy of a real city map or any GTA location.
+
+| City | Look | Signature details |
+| --- | --- | --- |
+| `mumbai` | Purple monsoon coast | Wet clearcoat roads, heavy rain, puddles, palms, coastal arch, warm low sun |
+| `delhi` | Dry golden haze | Sandstone civic arch, broad boulevard, winter fog, round trees, elevated metro, no rain |
+| `gurugram` | Cyan glass skyline | Tall reflective towers, skybridge, neon office signs, light drizzle, elevated metro |
+| `india` | Bharat highway mix | Mixed skyline, tricolor highway gate, palms, light monsoon rain, metro, pan-India signs |
+
+Added in this build:
+
+- **Four switchable city maps** with their own sky shader colors, fog, sun direction/intensity, exposure, bloom, color grade, road material, building palette/heights, window colors, signs, traffic colors, foliage, crowd colors and weather.
+- **Original landmarks:** Mumbai coastal promenade, Delhi civic arch + reflecting pool, Gurugram glass campus + skybridge, India Tour tricolor gate, plus elevated metro lines on Delhi / Gurugram / India Tour.
+- **ULTRA graphics preset:** higher pixel-ratio cap, strongest bloom, wider `74°` FOV, lower chase camera, stronger reflections and rain.
+- **Fast switching:** start-screen city buttons, `C` to cycle, `1`–`4` to select, `?city=delhi` / `?city=guru` / `?city=india` URL params, and `localStorage` persistence. The world is rebuilt in-place and old GPU resources are disposed.
+- **Connect Play city sync:** the host's city is authoritative and is sent to all riders; late joiners receive it in `welcome`, and a shared run starts only after the city is applied.
+- **Horizontal kept:** PWA `"orientation": "landscape"`, `F` / `LANDSCAPE / FULLSCREEN`, rotate overlay, compact widescreen CSS and HUD/minimap city labels remain.
+
+The UI's **WHAT'S NEW** panel lists the additions inside the game as well.
 
 ## Deploy to Render
 

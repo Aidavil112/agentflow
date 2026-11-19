@@ -14,6 +14,7 @@ import { ParticleSystem } from "./particles.js";
 import { UI } from "./ui.js";
 import { clamp, cleanName, damp, dampAngle, isTouchDevice, safeGet, safeSet, saveHighScore, vibrate } from "./utils.js";
 import { Vehicle } from "./vehicle.js";
+import { CITY_ORDER, CITY_PRESETS, resolveCityId } from "./cities.js";
 import { World } from "./world.js";
 
 const NAME_KEY = "monsoon-drift-name-v1";
@@ -45,6 +46,7 @@ const CHARACTER_OPTIONS = {
 };
 
 const QUALITY_KEY = "monsoon-drift-quality-v1";
+const CITY_KEY = "monsoon-drift-city-v1";
 
 const GRAPHICS_PRESETS = {
   performance: {
@@ -74,12 +76,22 @@ const GRAPHICS_PRESETS = {
     saturation: 1.14, contrast: 1.10, vignette: 0.25,
     shadows: true, rainOpacity: 0.30, envIntensity: 1.0,
   },
+  ultra: {
+    label: "ULTRA",
+    note: "Max visuals · higher pixel cap, strongest bloom, reflections and wide FOV",
+    maxPixelRatio: 2.0, exposure: 1.36,
+    bloom: 1.02, bloomRadius: 0.68, bloomThreshold: 0.60,
+    smaa: true, colorGrade: true,
+    saturation: 1.18, contrast: 1.13, vignette: 0.28,
+    shadows: true, rainOpacity: 0.36, envIntensity: 1.22,
+  },
 };
 
 const CAMERA_PROFILES = {
   performance: { distance: 8.6, height: 4.0, fov: 60, lookAhead: 6, menuFov: 58 },
   balanced: { distance: 9.2, height: 4.2, fov: 62, lookAhead: 7, menuFov: 54 },
   cinematic: { distance: 10.6, height: 3.45, fov: 70, lookAhead: 11, menuFov: 50 },
+  ultra: { distance: 11.2, height: 3.2, fov: 74, lookAhead: 13, menuFov: 48 },
 };
 
 const ColorGradeShader = {
@@ -119,6 +131,13 @@ export class Game {
   constructor() {
     this.canvas = document.getElementById("game-canvas");
     this.isMobile = isTouchDevice() || window.innerWidth < 760;
+    const params = new URLSearchParams(location.search);
+    const urlCity = resolveCityId(params.get("city"));
+    const savedCity = safeGet(CITY_KEY, "mumbai");
+    this.cityId = urlCity || (CITY_PRESETS[savedCity] ? savedCity : "mumbai");
+    if (urlCity) safeSet(CITY_KEY, urlCity);
+    this.city = CITY_PRESETS[this.cityId];
+
     const savedQuality = safeGet(QUALITY_KEY, "balanced");
     this.qualityPreset = GRAPHICS_PRESETS[savedQuality] ? savedQuality : "balanced";
     this.renderer = new THREE.WebGLRenderer({
@@ -174,6 +193,9 @@ export class Game {
     this.audio = new AudioEngine();
     this.input = new Input();
     this.ui = new UI(this);
+    this.ui.setCity(this.cityId, this.city);
+    document.documentElement.style.setProperty("--city-accent", this.city.accent);
+    document.title = `Monsoon Drift · ${this.city.label} · India City Rush 3D`;
     this.particles = new ParticleSystem(this.scene, this.isMobile ? 430 : 720);
 
     const savedCharacter = safeGet(CHARACTER_KEY, "ayaan");
@@ -193,7 +215,7 @@ export class Game {
     this.playerName = cleanName(safeGet(NAME_KEY, "RIDER"));
     this.ui.setPlayerName(this.playerName);
     this.ui.setCharacter(this.characterId, CHARACTER_OPTIONS[this.characterId]);
-    this.roomFromUrl = (new URLSearchParams(location.search).get("room") || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+    this.roomFromUrl = (params.get("room") || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
     this.autoJoined = false;
     this.connectStatus = "Not connected";
 
@@ -234,16 +256,23 @@ export class Game {
         this.connectStatus = status;
         if (this.state === "connect") this.updateConnectUI();
       },
+      onCity: (city) => this.applyCityFromNetwork(city),
       onWelcome: (msg) => {
+        if (msg.city) this.applyCityFromNetwork(msg.city);
         this.ui.showToast(`Room ${msg.room} ready · share the invite`, 2400);
         this.updateConnectUI();
       },
       onPlayers: (players) => {
         this.syncRemotePlayersFromPlayers(players);
+        const host = players.find((player) => player.id === this.network.hostId);
+        if (host?.city) this.applyCityFromNetwork(host.city);
         if (this.state === "connect") this.updateConnectUI();
       },
       onState: (msg) => this.updateRemotePlayer(msg),
-      onStart: (msg) => this.beginConnectRun(msg),
+      onStart: (msg) => {
+        if (msg.city) this.applyCityFromNetwork(msg.city);
+        this.beginConnectRun(msg);
+      },
       onReset: () => {
         if (this.state === "gameover" || this.state === "connect") {
           this.state = "connect";
@@ -303,10 +332,20 @@ export class Game {
     this.input.onKey("KeyF", (event) => {
       if (!fromInput(event)) this.enterLandscapeMode();
     });
+    this.input.onKey("KeyC", (event) => {
+      if (fromInput(event)) return;
+      if (["menu", "connect", "paused", "gameover"].includes(this.state)) this.cycleCity(1);
+    });
+    CITY_ORDER.forEach((cityId, index) => {
+      this.input.onKey(`Digit${index + 1}`, (event) => {
+        if (fromInput(event)) return;
+        if (["menu", "connect", "paused", "gameover"].includes(this.state)) this.setCity(cityId);
+      });
+    });
   }
 
   handleConfirm(event) {
-    if (event?.target?.tagName === "INPUT") return;
+    if (event?.target?.tagName === "INPUT" || event?.target?.closest?.("button")) return;
     if (["menu", "loading"].includes(this.state)) this.startSolo();
     else if (this.state === "connect" && this.network.isHost() && !this.network.started) this.startConnectRun();
     else if (this.state === "gameover") this.restart();
@@ -321,8 +360,8 @@ export class Game {
         this.ui.setLoading(0.08 + progress * 0.52, `Loading ${label}`);
       });
       this.assets = assets;
-      this.ui.setLoading(0.66, "Sculpting the monsoon skyline");
-      this.world = new World(this.scene, assets, 20261119);
+      this.ui.setLoading(0.66, `Sculpting ${this.city.label}`);
+      this.world = new World(this.scene, assets, 20261119, this.cityId);
       this.hero = makeFullCar(assets.heroCar, this.carColor);
       this.scene.add(this.hero.group);
       this.vehicle = new Vehicle(this.hero, this.world);
@@ -361,28 +400,37 @@ export class Game {
 
   applyQualityPreset() {
     const preset = GRAPHICS_PRESETS[this.qualityPreset] || GRAPHICS_PRESETS.balanced;
+    const city = this.city || CITY_PRESETS[this.cityId] || CITY_PRESETS.mumbai;
     const cap = preset.maxPixelRatio * (this.isMobile ? 0.85 : 1);
     const ratio = Math.min(window.devicePixelRatio || 1, cap);
     this.pixelRatio = ratio;
     this.renderer.setPixelRatio(ratio);
     this.composer.setPixelRatio(ratio);
-    this.renderer.toneMappingExposure = preset.exposure;
-    this.bloomPass.strength = preset.bloom;
+    this.renderer.toneMappingExposure = preset.exposure * city.exposure;
+    this.bloomPass.strength = preset.bloom * city.bloom;
     this.bloomPass.radius = preset.bloomRadius;
     this.bloomPass.threshold = preset.bloomThreshold;
-    this.bloomPass.enabled = preset.bloom > 0;
+    this.bloomPass.enabled = this.bloomPass.strength > 0;
     this.smaaPass.enabled = preset.smaa && !this.isMobile;
     this.colorGradePass.enabled = preset.colorGrade;
-    this.colorGradePass.uniforms.saturation.value = preset.saturation;
-    this.colorGradePass.uniforms.contrast.value = preset.contrast;
-    this.colorGradePass.uniforms.vignette.value = preset.vignette;
+    this.colorGradePass.uniforms.saturation.value = preset.saturation * city.saturation;
+    this.colorGradePass.uniforms.contrast.value = preset.contrast * city.contrast;
+    this.colorGradePass.uniforms.vignette.value = preset.vignette * city.vignette;
     this.renderer.shadowMap.enabled = preset.shadows && !this.isMobile;
     if (this.world?.sun) {
       this.world.sun.castShadow = preset.shadows && !this.isMobile;
-      this.world.sun.intensity = preset.shadows ? 2.35 : 1.75;
+      this.world.sun.intensity = city.sunIntensity * (preset.shadows ? 1.12 : 0.84);
     }
-    if (this.world?.rain) this.world.rain.material.opacity = preset.rainOpacity;
-    this.scene.environmentIntensity = preset.envIntensity;
+    if (this.world?.rain) {
+      this.world.rain.material.opacity = preset.rainOpacity * city.rainScale;
+      this.world.rain.group.visible = city.rainScale > 0.02;
+    }
+    if (this.world?.puddles) {
+      const weatherBoost = clamp(preset.rainOpacity / 0.24, 0.5, 1.5);
+      this.world.puddles.material.opacity = city.puddleOpacity * weatherBoost;
+      this.world.puddles.visible = city.puddleOpacity > 0.005;
+    }
+    this.scene.environmentIntensity = preset.envIntensity * city.envIntensity;
     this.qualityReduced = this.qualityPreset === "performance";
     this.ui.setQuality(this.qualityPreset, preset);
   }
@@ -395,6 +443,51 @@ export class Game {
     this.audio.unlock();
     this.audio.sfx("ui");
     this.ui.showToast(`${GRAPHICS_PRESETS[id].label} graphics selected`, 1800);
+  }
+
+  applyCityFromNetwork(city) {
+    const key = resolveCityId(city);
+    if (!key || key === this.cityId) return;
+    this.setCity(key, { fromNetwork: true, silent: true });
+  }
+
+  setCity(id, { fromNetwork = false, silent = false } = {}) {
+    const key = resolveCityId(id);
+    if (!key) return;
+    const city = CITY_PRESETS[key];
+    if (key === this.cityId && this.world) {
+      if (!silent) this.ui.showToast(`${city.label} is already loaded`, 1200);
+      return;
+    }
+    if (["playing", "countdown"].includes(this.state) && !fromNetwork) {
+      this.ui.showToast("City change ke liye pehle pause karo", 2200);
+      return;
+    }
+    this.cityId = key;
+    this.city = city;
+    if (!fromNetwork) safeSet(CITY_KEY, key);
+    document.documentElement.style.setProperty("--city-accent", city.accent);
+    document.title = `Monsoon Drift · ${city.label} · India City Rush 3D`;
+    if (this.world) {
+      this.world.setCity(key);
+      this.vehicle.world = this.world;
+      this.vehicle.reset({ x: 0, z: -4, yaw: 0, health: 3, boost: 38 });
+      this.particles.reset();
+      this.applyQualityPreset();
+    }
+    this.ui.setCity(key, city);
+    if (this.state === "connect") this.updateConnectUI();
+    if (!silent) {
+      this.audio.unlock();
+      this.audio.sfx("ui");
+      this.ui.showToast(`${city.label} loaded · ${city.tag}`, 2400);
+    }
+  }
+
+  cycleCity(delta = 1) {
+    const index = CITY_ORDER.indexOf(this.cityId);
+    const next = CITY_ORDER[(index + delta + CITY_ORDER.length) % CITY_ORDER.length];
+    this.setCity(next);
   }
 
   async enterLandscapeMode() {
@@ -585,6 +678,7 @@ export class Game {
   makeInviteUrl(room) {
     const url = new URL(location.href);
     url.searchParams.set("room", room);
+    url.searchParams.set("city", this.cityId);
     url.hash = "";
     return url.toString();
   }
@@ -629,13 +723,14 @@ export class Game {
       selfId: this.network.id,
       connected: this.network.isConnected(),
       started: this.network.started,
+      city: CITY_PRESETS[this.cityId],
     });
   }
 
   createRoom() {
     this.audio.unlock();
     this.audio.sfx("ui");
-    this.network.connect({ name: this.playerName, room: "", create: true });
+    this.network.connect({ name: this.playerName, room: "", create: true, city: this.cityId });
     this.connectStatus = "Connecting…";
     this.updateConnectUI();
   }
@@ -654,7 +749,7 @@ export class Game {
       this.input.setEnabled(false);
     }
     this.ui.setJoinCode(room);
-    this.network.connect({ name: this.playerName, room, create: false });
+    this.network.connect({ name: this.playerName, room, create: false, city: this.cityId });
     this.connectStatus = "Connecting…";
     this.updateConnectUI();
   }
@@ -689,7 +784,7 @@ export class Game {
     }
     this.audio.unlock();
     this.audio.sfx("ui");
-    this.network.start(this.makeSeed());
+    this.network.start(this.makeSeed(), this.cityId);
   }
 
   startSolo() {
@@ -812,7 +907,7 @@ export class Game {
     if (this.mode === "connect" && this.network.isConnected()) {
       if (this.network.isHost()) {
         this.audio.unlock();
-        this.network.start(this.makeSeed());
+        this.network.start(this.makeSeed(), this.cityId);
         this.ui.showToast("Restarting room…", 1500);
       } else {
         this.state = "connect";

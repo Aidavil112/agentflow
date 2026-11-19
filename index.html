@@ -4,14 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#090d1e" />
-    <meta name="description" content="Monsoon Drift — an original India-inspired 3D open-world arcade driving game with Blender characters and room-code multiplayer." />
+    <meta name="description" content="Monsoon Drift — an original India-inspired 3D open-world arcade driving game with Mumbai, Delhi, Gurugram and India Tour city maps, Blender characters, cinematic graphics and room-code multiplayer." />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-    <title>Monsoon Drift · Mumbai Chai Rush 3D</title>
+    <title>Monsoon Drift · India City Rush 3D</title>
   </head>
   <body>
     <div id="app">
@@ -31,6 +31,7 @@
               <span id="combo-chip" class="combo-chip">×1 COMBO</span>
             </div>
             <div class="mode-tag" id="mode-tag">SOLO RUN</div>
+            <div class="city-tag" id="hud-city">MUMBAI · MONSOON</div>
           </div>
 
           <div class="hud-cluster hud-center">
@@ -74,7 +75,7 @@
           </div>
           <div class="minimap-wrap">
             <canvas id="minimap" width="176" height="176" aria-label="City minimap"></canvas>
-            <div class="minimap-corner">MUMBAI · MONSOON</div>
+            <div class="minimap-corner" id="minimap-city">MUMBAI · MONSOON</div>
           </div>
         </div>
 
@@ -111,7 +112,7 @@
           <div class="menu-main">
             <div class="eyebrow"><span class="live-dot"></span> ORIGINAL OPEN-WORLD ARCADE RACER</div>
             <h1 class="game-title">MONSOON<br /><span>DRIFT</span></h1>
-            <p class="tagline">Mumbai after the rain. One hatchback, a city of glowing chai gates, and ninety seconds to make the streets remember your name.</p>
+            <p class="tagline" id="city-tagline">Mumbai after the rain. One hatchback, a city of glowing chai gates, and ninety seconds to make the streets remember your name.</p>
 
             <label class="name-field">
               <span>RIDER NAME</span>
@@ -143,6 +144,20 @@
               <small id="character-status" class="character-status">Helmet, jacket, full throttle</small>
             </div>
 
+            <div class="city-panel" aria-label="Choose city">
+              <div class="city-head">
+                <span class="panel-label">CHOOSE CITY · INDIA</span>
+                <span class="city-badge">4 ORIGINAL MAPS</span>
+              </div>
+              <div class="city-row" id="city-row">
+                <button class="city-btn selected" data-city="mumbai" type="button" aria-pressed="true">MUMBAI <small>MONSOON COAST</small></button>
+                <button class="city-btn" data-city="delhi" type="button" aria-pressed="false">DELHI <small>CIVIC BOULEVARD</small></button>
+                <button class="city-btn" data-city="gurugram" type="button" aria-pressed="false">GURUGRAM <small>NEON GRID</small></button>
+                <button class="city-btn" data-city="india" type="button" aria-pressed="false">INDIA TOUR <small>BHARAT MIX</small></button>
+              </div>
+              <small id="city-status" class="city-status">Mumbai · wet coastal roads, palms, sea breeze and a purple monsoon skyline</small>
+            </div>
+
             <div class="view-panel" aria-label="Graphics and landscape settings">
               <div class="view-head">
                 <span class="panel-label">GRAPHICS &amp; HORIZON</span>
@@ -152,6 +167,7 @@
                 <button class="quality-btn" data-quality="performance" type="button" aria-pressed="false">PERFORMANCE</button>
                 <button class="quality-btn selected" data-quality="balanced" type="button" aria-pressed="true">BALANCED</button>
                 <button class="quality-btn" data-quality="cinematic" type="button" aria-pressed="false">CINEMATIC</button>
+                <button class="quality-btn" data-quality="ultra" type="button" aria-pressed="false">ULTRA</button>
               </div>
               <div class="view-actions">
                 <button id="landscape-btn" class="btn landscape" type="button"><span>⛶</span> LANDSCAPE / FULLSCREEN</button>
@@ -160,11 +176,12 @@
               <details class="whats-new">
                 <summary>WHAT'S NEW IN THIS BUILD</summary>
                 <ul>
-                  <li>PMREM studio reflections on cars, metal and wet roads</li>
-                  <li>SMAA edge smoothing + cinematic color grade + stronger neon bloom</li>
-                  <li>Distant Mumbai skyline, warm sun disc and layered monsoon clouds</li>
-                  <li>Widescreen cinematic camera with a lower, longer horizon</li>
-                  <li>Landscape lock / rotate prompt for horizontal mobile play</li>
+                  <li>Four original city maps: Mumbai, Delhi, Gurugram (Guru) and India Tour</li>
+                  <li>City-specific skylines, weather, landmarks, signs, traffic and lighting</li>
+                  <li>ULTRA graphics preset with wider FOV, stronger bloom and reflections</li>
+                  <li>PMREM, SMAA, color grade, warm horizon and layered clouds retained</li>
+                  <li>Host city sync in Connect Play; invite links carry <b>?city=</b></li>
+                  <li>Landscape lock / rotate prompt; <b>C</b> cycles cities, <b>1–4</b> selects</li>
                 </ul>
               </details>
             </div>
@@ -183,6 +200,8 @@
                 <div><kbd>SHIFT</kbd><span>Boost</span></div>
                 <div><kbd>P</kbd><span>Pause</span></div>
                 <div><kbd>F</kbd><span>Fullscreen / landscape</span></div>
+                <div><kbd>C</kbd><span>Cycle city</span></div>
+                <div><kbd>1</kbd>–<kbd>4</kbd><span>Select city</span></div>
               </div>
               <small>On touch: left stick to steer, right pedals to drive. Collect cups, thread traffic, hit gates.</small>
             </div>
@@ -202,7 +221,7 @@
             <div class="side-tip"><b>CHAI RUSH</b><span>Gates add time. Drifts, near misses and cups build your combo. Keep it alive.</span></div>
           </aside>
         </div>
-        <div class="screen-footer">Original India-inspired 3D open world · Cinematic graphics · Widescreen landscape · Blender cast · Connect Play</div>
+        <div class="screen-footer">Original India-inspired 3D open world · 4 city maps · ULTRA graphics · Widescreen landscape · Blender cast · Connect Play · No GTA assets</div>
       </section>
 
       <section id="connect-screen" class="screen hidden" aria-label="Connect Play lobby">
@@ -240,6 +259,10 @@
             <div>
               <span class="hud-label">STATUS</span>
               <strong id="room-status">Not connected</strong>
+            </div>
+            <div>
+              <span class="hud-label">CITY</span>
+              <strong id="connect-city">MUMBAI · MONSOON</strong>
             </div>
             <div id="connect-players" class="player-chips"></div>
           </div>
