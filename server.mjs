@@ -34,6 +34,14 @@ function resolveFile(pathname) {
 
 function serve(req, res) {
   const url = new URL(req.url, "http://localhost");
+  if (url.pathname === "/health") {
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+    });
+    res.end(JSON.stringify({ status: "ok", service: "monsoon-drift", websocket: "/net" }));
+    return;
+  }
   if (url.pathname === "/net") {
     res.writeHead(426, { "Content-Type": "text/plain; charset=utf-8" });
     res.end("WebSocket upgrade required\n");

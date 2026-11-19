@@ -76,3 +76,22 @@ At runtime, traffic and remote-player vehicles are merged into single vertex-col
 ## Tech
 
 Three.js, Vite, WebAudio, Canvas 2D minimap, `ws` WebSockets, and Blender-generated glTF assets.
+
+## Deploy to Render
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Aidavil112/agentflow/tree/arena/2d55140b-agentflow)
+
+This branch is ready for a one-click **Render** deployment. The button points at `arena/2d55140b-agentflow`; after this branch is merged into `main`, use `https://render.com/deploy?repo=https://github.com/Aidavil112/agentflow` instead.
+
+`render.yaml` provisions one Node web service:
+
+- Build: `npm ci --include=dev && npm run build`
+- Start: `npm run preview` (`node server.mjs`)
+- Health check: `/health`
+- Region: `singapore` (low latency from India)
+- Plan: `free`
+- `PORT` is injected by Render; the server already binds `0.0.0.0` and serves both the game and the `/net` WebSocket endpoint.
+
+Click the button, sign in to Render, connect GitHub, and confirm the service name. The first deploy builds `dist/` and then serves the full game, including **Connect Play** room-code multiplayer, over HTTPS/WSS.
+
+> Render's free web services spin down after inactivity and have a cold start on the next request. For an always-on public multiplayer room, switch the service to a paid Starter plan.
