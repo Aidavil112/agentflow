@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#090d1e" />
+    <meta name="description" content="Monsoon Drift — an original India-inspired open-world arcade driving game with room-code multiplayer." />
+    <title>Monsoon Drift · Mumbai Chai Rush</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game-canvas" aria-label="Monsoon Drift 3D game world"></canvas>
+      <div id="sky-vignette" aria-hidden="true"></div>
+      <div id="speed-lines" aria-hidden="true"></div>
+      <div id="boost-flash" aria-hidden="true"></div>
+      <div id="damage-flash" aria-hidden="true"></div>
+      <div id="float-layer" aria-hidden="true"></div>
+
+      <section id="hud" class="hidden" aria-label="Game heads-up display">
+        <div class="hud-top">
+          <div class="hud-cluster hud-left">
+            <div class="hud-card score-card">
+              <span class="hud-label">SCORE</span>
+              <strong id="score-value">0</strong>
+              <span id="combo-chip" class="combo-chip">×1 COMBO</span>
+            </div>
+            <div class="mode-tag" id="mode-tag">SOLO RUN</div>
+          </div>
+
+          <div class="hud-cluster hud-center">
+            <div class="objective-pill">
+              <span class="objective-icon">✦</span>
+              <span id="objective-text">Reach the chai gate</span>
+              <span class="objective-sep">·</span>
+              <span id="gate-distance">26m</span>
+            </div>
+            <div id="compass" class="compass"><span id="compass-arrow">▲</span></div>
+          </div>
+
+          <div class="hud-cluster hud-right">
+            <div class="hud-card timer-card">
+              <span class="hud-label">TIME</span>
+              <strong id="timer-value">1:15</strong>
+            </div>
+            <button id="mute-btn" class="icon-btn" type="button" aria-label="Toggle sound">♫</button>
+            <button id="pause-btn" class="icon-btn" type="button" aria-label="Pause game">Ⅱ</button>
+          </div>
+        </div>
+
+        <div id="room-pill" class="room-pill hidden">
+          <span class="live-dot"></span><span>ROOM <b id="room-code-hud">----</b></span>
+        </div>
+
+        <div id="multiplayer-hud" class="multiplayer-hud hidden">
+          <div class="mp-title">CONNECT PLAY</div>
+          <div id="mp-players" class="mp-players"></div>
+        </div>
+
+        <div class="hud-bottom">
+          <div class="gauge-stack">
+            <div class="speedometer">
+              <strong id="speed-value">0</strong><span>KM/H</span>
+              <div class="speed-ring"></div>
+            </div>
+            <div class="meter-row"><span>HEALTH</span><div class="meter"><i id="health-fill" class="health-fill"></i></div></div>
+            <div class="meter-row"><span>BOOST</span><div class="meter"><i id="boost-fill" class="boost-fill"></i></div></div>
+            <div class="meter-row combo-meter"><span>COMBO</span><div class="meter"><i id="combo-fill" class="combo-fill"></i></div></div>
+          </div>
+          <div class="minimap-wrap">
+            <canvas id="minimap" width="176" height="176" aria-label="City minimap"></canvas>
+            <div class="minimap-corner">MUMBAI · MONSOON</div>
+          </div>
+        </div>
+
+        <div id="touch-controls" class="touch-controls hidden" aria-label="Touch controls">
+          <div id="joystick" class="joystick">
+            <div class="joystick-ring"></div>
+            <div id="joystick-knob" class="joystick-knob"></div>
+            <span class="joystick-hint">STEER</span>
+          </div>
+          <div class="touch-buttons">
+            <button id="btn-brake" class="touch-btn small" type="button" aria-label="Brake">BRAKE</button>
+            <button id="btn-drift" class="touch-btn small" type="button" aria-label="Drift">DRIFT</button>
+            <button id="btn-boost" class="touch-btn boost" type="button" aria-label="Boost">BOOST</button>
+            <button id="btn-throttle" class="touch-btn throttle" type="button" aria-label="Accelerate">GO</button>
+          </div>
+        </div>
+
+        <div id="go-banner" class="go-banner hidden">GO!</div>
+        <div id="countdown-banner" class="countdown-banner hidden">GET READY</div>
+      </section>
+
+      <section id="loading-screen" class="screen active" aria-label="Loading">
+        <div class="loading-card">
+          <div class="brand-mark">✺</div>
+          <h1>MONSOON <span>DRIFT</span></h1>
+          <p>Warming up the monsoon city…</p>
+          <div class="loading-track"><i id="loading-progress"></i></div>
+          <small id="loading-status">Loading Blender assets</small>
+        </div>
+      </section>
+
+      <section id="start-screen" class="screen hidden" aria-label="Start screen">
+        <div class="menu-shell start-shell">
+          <div class="menu-main">
+            <div class="eyebrow"><span class="live-dot"></span> ORIGINAL OPEN-WORLD ARCADE RACER</div>
+            <h1 class="game-title">MONSOON<br /><span>DRIFT</span></h1>
+            <p class="tagline">Mumbai after the rain. One hatchback, a city of glowing chai gates, and ninety seconds to make the streets remember your name.</p>
+
+            <label class="name-field">
+              <span>RIDER NAME</span>
+              <input id="name-input" type="text" maxlength="14" value="RIDER" autocomplete="off" spellcheck="false" />
+            </label>
+
+            <div class="menu-actions">
+              <button id="start-btn" class="btn primary" type="button"><span>▶</span> SOLO RUN</button>
+              <button id="connect-btn" class="btn secondary" type="button"><span>◈</span> CONNECT PLAY</button>
+            </div>
+
+            <div class="controls-card">
+              <div class="controls-title">CONTROLS</div>
+              <div class="controls-grid">
+                <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Drive / steer</span></div>
+                <div><kbd>SPACE</kbd><span>Drift</span></div>
+                <div><kbd>SHIFT</kbd><span>Boost</span></div>
+                <div><kbd>P</kbd><span>Pause</span></div>
+              </div>
+              <small>On touch: left stick to steer, right pedals to drive. Collect cups, thread traffic, hit gates.</small>
+            </div>
+          </div>
+
+          <aside class="menu-side">
+            <div class="side-header"><span>LOCAL LEGENDS</span><span class="trophy">✦</span></div>
+            <table class="score-table">
+              <thead><tr><th>#</th><th>RIDER</th><th>SCORE</th></tr></thead>
+              <tbody id="start-scores"></tbody>
+            </table>
+            <div class="side-tip"><b>CHAI RUSH</b><span>Gates add time. Drifts, near misses and cups build your combo. Keep it alive.</span></div>
+          </aside>
+        </div>
+        <div class="screen-footer">GTA-style freedom · Original India-inspired world · Built with Three.js &amp; Blender assets</div>
+      </section>
+
+      <section id="connect-screen" class="screen hidden" aria-label="Connect Play lobby">
+        <div class="menu-shell connect-shell">
+          <div class="connect-head">
+            <button id="connect-back-btn" class="back-btn" type="button" aria-label="Back to menu">←</button>
+            <div>
+              <div class="eyebrow">ROOM-CODE MULTIPLAYER</div>
+              <h2>CONNECT <span>PLAY</span></h2>
+            </div>
+          </div>
+
+          <p class="connect-intro">Share a room code and race the same city in real time. Open the invite in another tab or on another device on the same server.</p>
+
+          <div class="connect-grid">
+            <div class="connect-panel">
+              <div class="panel-label">CREATE A ROOM</div>
+              <button id="create-room-btn" class="btn primary" type="button">GENERATE CODE</button>
+              <div id="room-code-display" class="room-code-display">----</div>
+              <div class="invite-row">
+                <input id="invite-link" type="text" readonly placeholder="Invite link appears here" aria-label="Invite link" />
+                <button id="copy-invite-btn" class="btn tiny" type="button">COPY</button>
+              </div>
+            </div>
+            <div class="connect-panel">
+              <div class="panel-label">JOIN A ROOM</div>
+              <label class="code-field">
+                <input id="join-code-input" type="text" maxlength="4" placeholder="ABCD" autocomplete="off" spellcheck="false" />
+              </label>
+              <button id="join-room-btn" class="btn secondary" type="button">JOIN ROOM</button>
+            </div>
+          </div>
+
+          <div class="lobby-strip">
+            <div>
+              <span class="hud-label">STATUS</span>
+              <strong id="room-status">Not connected</strong>
+            </div>
+            <div id="connect-players" class="player-chips"></div>
+          </div>
+
+          <button id="connect-start-btn" class="btn primary wide" type="button" disabled>START SHARED RUN</button>
+          <small id="connect-hint" class="connect-hint">The host starts a 90-second score attack. Up to 8 riders.</small>
+        </div>
+      </section>
+
+      <section id="pause-screen" class="screen hidden" aria-label="Pause screen">
+        <div class="modal-card">
+          <div class="eyebrow">MONSOON HOLD</div>
+          <h2>PAUSED</h2>
+          <p>The city can wait. Your combo cannot.</p>
+          <div class="modal-actions">
+            <button id="resume-btn" class="btn primary" type="button">RESUME</button>
+            <button id="pause-restart-btn" class="btn secondary" type="button">RESTART</button>
+            <button id="pause-menu-btn" class="btn ghost" type="button">MAIN MENU</button>
+          </div>
+          <button id="pause-mute-btn" class="text-btn" type="button">SOUND: ON</button>
+        </div>
+      </section>
+
+      <section id="gameover-screen" class="screen hidden" aria-label="Game over screen">
+        <div class="menu-shell gameover-shell">
+          <div class="gameover-left">
+            <div class="eyebrow">RUN COMPLETE</div>
+            <h2 id="gameover-reason">THE CLOCK RAN OUT</h2>
+            <div id="new-record" class="new-record hidden">✦ NEW LOCAL RECORD ✦</div>
+            <div class="final-score"><span>SCORE</span><strong id="final-score">0</strong></div>
+            <div class="stat-grid">
+              <div><span>GATES</span><b id="final-gates">0</b></div>
+              <div><span>BEST COMBO</span><b id="final-combo">×1</b></div>
+              <div><span>DISTANCE</span><b id="final-distance">0 km</b></div>
+            </div>
+            <div class="menu-actions">
+              <button id="restart-btn" class="btn primary" type="button"><span>↻</span> INSTANT RESTART</button>
+              <button id="gameover-menu-btn" class="btn secondary" type="button">MENU</button>
+            </div>
+            <small class="restart-hint">Press <kbd>R</kbd>, <kbd>ENTER</kbd> or <kbd>SPACE</kbd> to restart instantly.</small>
+          </div>
+          <aside class="menu-side">
+            <div class="side-header"><span>LOCAL LEGENDS</span><span class="trophy">✦</span></div>
+            <table class="score-table">
+              <thead><tr><th>#</th><th>RIDER</th><th>SCORE</th></tr></thead>
+              <tbody id="gameover-scores"></tbody>
+            </table>
+            <div class="side-tip"><b>NEXT RUN</b><span>Keep the combo alive by chaining cups, drifts and near misses. Boost is earned, not given.</span></div>
+          </aside>
+        </div>
+      </section>
+
+      <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
