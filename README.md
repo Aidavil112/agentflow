@@ -1,6 +1,6 @@
 # Monsoon Drift · Mumbai Chai Rush
 
-An original, India-inspired 3D open-world arcade driving game built for the browser. It takes the street-energy of a GTA-style city and rebuilds it as a cinematic, 60fps-friendly Mumbai-monsoon playground with Blender-authored characters, a live 3D rider preview, rainy streets, neon bloom, room-code multiplayer, and an installable PWA shell.
+An original, India-inspired 3D open-world arcade driving game built for the browser. It takes the street-energy of a GTA-style city and rebuilds it as a cinematic, 60fps-friendly Mumbai-monsoon playground with Blender-authored characters, a live 3D rider preview, rainy streets, neon bloom, graphics presets, a widescreen horizon, landscape play, room-code multiplayer, and an installable PWA shell.
 
 > This is an original vertical slice, not a copy of GTA VI and not a GPU cloud-streaming service. It is a cloud-hostable WebGL game: once deployed to Render, anyone with the URL can play solo or join Connect Play rooms in their own browser.
 
@@ -30,6 +30,7 @@ The preview server binds to `0.0.0.0:4173` by default and serves both the built 
 | Drift | `Space` | `DRIFT` |
 | Boost | `Shift` | `BOOST` |
 | Pause | `P` / `Esc` | Pause button |
+| Fullscreen / landscape | `F` | `LANDSCAPE / FULLSCREEN` button or rotate prompt |
 | Instant restart | `R`, `Enter` or `Space` on game over | Restart button |
 | Mute | `M` | Speaker buttons |
 
@@ -78,15 +79,31 @@ At runtime, traffic, crowd NPCs and remote-player vehicles are merged into singl
 ## Performance notes
 
 - Instanced buildings, windows, street lights, lane markings, garlands, palms, puddles and crowd NPCs.
-- One shared particle `Points` buffer, one rain `LineSegments` buffer, and a cinematic bloom/output post-processing chain.
+- One shared particle `Points` buffer, one rain `LineSegments` buffer, and a cinematic `RenderPass → Bloom → SMAA → Color grade → Output` post-processing chain.
+- PMREM `RoomEnvironment` reflections for PBR car paint, metal, glass and wet clearcoat roads; distant instanced skyline and warm sun/horizon shader.
 - Merged vertex-color geometry for traffic and instanced crowds; only the hero car, menu rider and nearby pedestrians keep detailed node hierarchies.
-- Capped device pixel ratio, optional shadows, and automatic performance mode that disables bloom and lowers resolution if frame times slip.
+- Three graphics presets: `PERFORMANCE`, `BALANCED`, `CINEMATIC`; capped device pixel ratio, optional shadows, and automatic performance mode that disables bloom/SMAA/grade and lowers resolution if frame times slip.
 - Delta-time clamped physics, no per-frame geometry allocation, and no external texture/font requests.
 - Service worker caches the app shell, icons, JS/CSS and GLBs for faster repeat loads and offline solo play. Connect Play still needs the live `/net` server.
 
 ## Tech
 
-Three.js + post-processing, Vite, WebAudio, Canvas 2D minimap, PWA/service worker, `ws` WebSockets, and Blender-generated glTF assets.
+Three.js + PMREM/SMAA/bloom/color-grade post-processing, Vite, WebAudio, Canvas 2D minimap, PWA/service worker with landscape orientation, `ws` WebSockets, and Blender-generated glTF assets.
+
+## Cinematic graphics & horizontal horizon
+
+> No GTA VI code, assets, maps, characters or proprietary files were reverse-engineered or copied. This is an original India-inspired implementation of open-world driving *genre* ideas.
+
+Added in this build:
+
+- **PBR reflections:** `PMREMGenerator` + `RoomEnvironment` gives car paint, glass, metal and wet roads realistic environment lighting.
+- **Cleaner image:** `SMAAPass` edge smoothing, a custom saturation/contrast/vignette color-grade shader, and adjustable `UnrealBloomPass` neon glow.
+- **Wider horizon:** a lower cinematic chase camera, wider FOV, warm monsoon sun disc, horizon band, layered cloud streaks, and a 150-building instanced distant Mumbai skyline with glowing windows.
+- **Graphics presets:** `PERFORMANCE`, `BALANCED`, `CINEMATIC` persist in `localStorage`; they control pixel ratio, bloom, SMAA, color grade, shadows, rain opacity, environment intensity and camera profile.
+- **Landscape play:** PWA manifest requests `landscape`, a portrait rotate overlay appears on phones, `F` / `LANDSCAPE / FULLSCREEN` requests fullscreen and `screen.orientation.lock("landscape")`, and short landscape screens get compact HUD/menu CSS.
+- **What's new panel:** the start screen lists the graphics additions directly in the UI.
+
+On iPhone Safari, orientation auto-lock is not supported; the overlay asks the player to rotate manually. The game still runs in portrait, but the wide horizon and touch controls are designed for landscape.
 
 ## Deploy to Render
 

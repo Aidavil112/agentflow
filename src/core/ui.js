@@ -64,7 +64,13 @@ export class UI {
       characterCards: [...document.querySelectorAll(".character-card")],
       characterStatus: document.getElementById("character-status"),
       installBtn: document.getElementById("install-btn"),
+      qualityButtons: [...document.querySelectorAll(".quality-btn")],
+      qualityStatus: document.getElementById("quality-status"),
+      landscapeBtn: document.getElementById("landscape-btn"),
+      rotateBtn: document.getElementById("rotate-btn"),
+      rotateOverlay: document.getElementById("rotate-overlay"),
     };
+    this.orientationQuery = window.matchMedia("(orientation: portrait) and (max-width: 900px)");
     this.minimapCtx = this.el.minimap.getContext("2d");
     this.lastCombo = 1;
     this.comboTimer = null;
@@ -76,6 +82,8 @@ export class UI {
     this.bindEvents();
     this.renderHighScores();
     this.setMuteState(game.audio?.muted || false);
+    this.orientationQuery.addEventListener?.("change", () => this.updateOrientation());
+    this.updateOrientation();
   }
 
   bindEvents() {
@@ -101,6 +109,15 @@ export class UI {
     click("restart-btn", () => g.restart());
     click("gameover-menu-btn", () => g.toMenu());
     click("install-btn", () => this.promptInstall());
+    click("landscape-btn", () => g.enterLandscapeMode());
+    click("rotate-btn", () => g.enterLandscapeMode());
+
+    for (const button of this.el.qualityButtons) {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        g.setQualityPreset(button.dataset.quality);
+      });
+    }
 
     for (const card of this.el.characterCards) {
       card.addEventListener("click", (event) => {
@@ -224,6 +241,22 @@ export class UI {
       card.setAttribute("aria-pressed", card.dataset.character === id ? "true" : "false");
     }
     if (this.el.characterStatus && meta?.tag) this.el.characterStatus.textContent = meta.tag;
+  }
+
+  setQuality(id, meta = null) {
+    for (const button of this.el.qualityButtons) {
+      const selected = button.dataset.quality === id;
+      button.classList.toggle("selected", selected);
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+    }
+    if (this.el.qualityStatus && meta?.note) this.el.qualityStatus.textContent = meta.note;
+  }
+
+  updateOrientation() {
+    if (!this.el.rotateOverlay) return;
+    const portraitTouch = this.orientationQuery.matches ||
+      (window.innerHeight > window.innerWidth && window.innerWidth < 900);
+    this.el.rotateOverlay.classList.toggle("hidden", !portraitTouch);
   }
 
   setInstallPrompt(event) {

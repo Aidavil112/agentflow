@@ -1,5 +1,5 @@
 /* Monsoon Drift offline shell. WebSocket /net and /health are never cached. */
-const CACHE_NAME = "monsoon-drift-v4";
+const CACHE_NAME = "monsoon-drift-v5";
 const CORE_ASSETS = [
   "/",
   "/index.html",

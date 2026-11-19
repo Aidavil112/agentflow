@@ -143,6 +143,32 @@
               <small id="character-status" class="character-status">Helmet, jacket, full throttle</small>
             </div>
 
+            <div class="view-panel" aria-label="Graphics and landscape settings">
+              <div class="view-head">
+                <span class="panel-label">GRAPHICS &amp; HORIZON</span>
+                <span class="view-badge">ORIGINAL · NO GTA ASSETS</span>
+              </div>
+              <div class="quality-row" id="quality-row">
+                <button class="quality-btn" data-quality="performance" type="button" aria-pressed="false">PERFORMANCE</button>
+                <button class="quality-btn selected" data-quality="balanced" type="button" aria-pressed="true">BALANCED</button>
+                <button class="quality-btn" data-quality="cinematic" type="button" aria-pressed="false">CINEMATIC</button>
+              </div>
+              <div class="view-actions">
+                <button id="landscape-btn" class="btn landscape" type="button"><span>⛶</span> LANDSCAPE / FULLSCREEN</button>
+              </div>
+              <small id="quality-status" class="quality-status">Default · bloom, clean edges, wet roads, adaptive shadows</small>
+              <details class="whats-new">
+                <summary>WHAT'S NEW IN THIS BUILD</summary>
+                <ul>
+                  <li>PMREM studio reflections on cars, metal and wet roads</li>
+                  <li>SMAA edge smoothing + cinematic color grade + stronger neon bloom</li>
+                  <li>Distant Mumbai skyline, warm sun disc and layered monsoon clouds</li>
+                  <li>Widescreen cinematic camera with a lower, longer horizon</li>
+                  <li>Landscape lock / rotate prompt for horizontal mobile play</li>
+                </ul>
+              </details>
+            </div>
+
             <div class="menu-actions">
               <button id="start-btn" class="btn primary" type="button"><span>▶</span> SOLO RUN</button>
               <button id="connect-btn" class="btn secondary" type="button"><span>◈</span> CONNECT PLAY</button>
@@ -156,6 +182,7 @@
                 <div><kbd>SPACE</kbd><span>Drift</span></div>
                 <div><kbd>SHIFT</kbd><span>Boost</span></div>
                 <div><kbd>P</kbd><span>Pause</span></div>
+                <div><kbd>F</kbd><span>Fullscreen / landscape</span></div>
               </div>
               <small>On touch: left stick to steer, right pedals to drive. Collect cups, thread traffic, hit gates.</small>
             </div>
@@ -175,7 +202,7 @@
             <div class="side-tip"><b>CHAI RUSH</b><span>Gates add time. Drifts, near misses and cups build your combo. Keep it alive.</span></div>
           </aside>
         </div>
-        <div class="screen-footer">Original India-inspired 3D open world · Blender-made cast · Three.js rendering · Room-code Connect Play</div>
+        <div class="screen-footer">Original India-inspired 3D open world · Cinematic graphics · Widescreen landscape · Blender cast · Connect Play</div>
       </section>
 
       <section id="connect-screen" class="screen hidden" aria-label="Connect Play lobby">
@@ -262,6 +289,16 @@
             </table>
             <div class="side-tip"><b>NEXT RUN</b><span>Keep the combo alive by chaining cups, drifts and near misses. Boost is earned, not given.</span></div>
           </aside>
+        </div>
+      </section>
+
+      <section id="rotate-overlay" class="rotate-overlay hidden" aria-label="Rotate to landscape">
+        <div class="rotate-card">
+          <div class="rotate-icon">↻</div>
+          <h2>GO LANDSCAPE</h2>
+          <p>Monsoon Drift ka wide horizon horizontal mode me best lagta hai. Phone ghumao ya niche button dabao.</p>
+          <button id="rotate-btn" class="btn primary" type="button"><span>⛶</span> TRY LANDSCAPE LOCK</button>
+          <small>iOS Safari auto-lock support nahi karta — device manually rotate karo.</small>
         </div>
       </section>
 

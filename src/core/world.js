@@ -214,6 +214,7 @@ export class World {
 
   build() {
     this.buildSkyAndLights();
+    this.buildHorizon();
     this.buildGround();
     this.buildRoads();
     this.buildPuddles();
@@ -231,6 +232,7 @@ export class World {
   buildSkyAndLights() {
     this.scene.background = new THREE.Color(0x0a1024);
     this.scene.fog = new THREE.FogExp2(0x141b38, 0.0061);
+    const sunDirection = new THREE.Vector3(-0.48, 0.16, -0.86).normalize();
 
     const sky = new THREE.Mesh(
       new THREE.SphereGeometry(420, 32, 18),
@@ -241,8 +243,10 @@ export class World {
         toneMapped: false,
         uniforms: {
           topColor: { value: new THREE.Color(0x10143a) },
-          horizonColor: { value: new THREE.Color(0x6b3b75) },
+          horizonColor: { value: new THREE.Color(0x7b3f72) },
           bottomColor: { value: new THREE.Color(0x172b4a) },
+          sunColor: { value: new THREE.Color(0xffb36b) },
+          sunDirection: { value: sunDirection },
         },
         vertexShader: /* glsl */ `
           varying vec3 vWorldPosition;
@@ -256,11 +260,27 @@ export class World {
           uniform vec3 topColor;
           uniform vec3 horizonColor;
           uniform vec3 bottomColor;
+          uniform vec3 sunColor;
+          uniform vec3 sunDirection;
           varying vec3 vWorldPosition;
           void main() {
-            float h = normalize(vWorldPosition).y;
+            vec3 dir = normalize(vWorldPosition);
+            float h = dir.y;
             vec3 color = mix(bottomColor, horizonColor, smoothstep(-0.32, 0.12, h));
             color = mix(color, topColor, smoothstep(0.10, 0.78, h));
+
+            // Warm monsoon horizon band and a low sun just above the skyline.
+            float band = (h - 0.015) * 9.0;
+            float horizonBand = exp(-band * band);
+            color += vec3(1.0, 0.42, 0.18) * horizonBand * 0.10;
+            float sunDot = max(dot(dir, normalize(sunDirection)), 0.0);
+            float sunDisc = pow(sunDot, 180.0);
+            float sunGlow = pow(sunDot, 12.0) * 0.08;
+            color += sunColor * (sunDisc * 0.9 + sunGlow);
+
+            // Soft layered cloud streaks for a wider, more cinematic sky.
+            float cloud = sin(dir.x * 22.0 + dir.z * 11.0) * sin(dir.z * 17.0 - dir.x * 6.0);
+            color += vec3(0.045, 0.025, 0.07) * smoothstep(0.15, 0.85, cloud) * smoothstep(-0.05, 0.35, h);
             gl_FragColor = vec4(color, 1.0);
           }
         `,
@@ -275,7 +295,8 @@ export class World {
     this.root.add(ambient);
 
     const sun = new THREE.DirectionalLight(0xffd6a3, 2.1);
-    sun.position.set(-65, 92, -42);
+    sun.position.copy(sunDirection).multiplyScalar(190);
+    sun.position.y = Math.max(60, sun.position.y);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.camera.left = -80;
@@ -287,6 +308,61 @@ export class World {
     sun.shadow.bias = -0.0004;
     this.root.add(sun);
     this.sun = sun;
+  }
+
+  buildHorizon() {
+    const rng = mulberry32(this.seed + 8181);
+    const buildingCount = 150;
+    const windowCount = 260;
+    const dummy = new THREE.Object3D();
+    const color = new THREE.Color();
+
+    const buildingMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff, roughness: 0.92, metalness: 0.04,
+      emissive: 0x0b1430, emissiveIntensity: 0.28, fog: false,
+    });
+    const buildings = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), buildingMaterial, buildingCount);
+    buildings.name = "Distant Mumbai skyline";
+    buildings.frustumCulled = false;
+    for (let i = 0; i < buildingCount; i++) {
+      const angle = (i / buildingCount) * TAU + (rng() - 0.5) * 0.04;
+      const radius = 172 + rng() * 42;
+      const height = 9 + rng() * 42;
+      dummy.position.set(Math.cos(angle) * radius, height / 2 - 0.4, Math.sin(angle) * radius);
+      dummy.rotation.set(0, -angle, 0);
+      dummy.scale.set(3 + rng() * 9, height, 4 + rng() * 7);
+      dummy.updateMatrix();
+      buildings.setMatrixAt(i, dummy.matrix);
+      color.setHSL(0.62 + rng() * 0.08, 0.28, 0.10 + rng() * 0.06);
+      buildings.setColorAt(i, color);
+    }
+    buildings.instanceMatrix.needsUpdate = true;
+    if (buildings.instanceColor) buildings.instanceColor.needsUpdate = true;
+    this.root.add(buildings);
+
+    const windowMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.42,
+      toneMapped: false, fog: false, depthWrite: false,
+    });
+    const windows = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), windowMaterial, windowCount);
+    windows.name = "Distant skyline windows";
+    windows.frustumCulled = false;
+    for (let i = 0; i < windowCount; i++) {
+      const angle = rng() * TAU;
+      const radius = 168 + rng() * 48;
+      const y = 3 + rng() * 38;
+      dummy.position.set(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
+      dummy.rotation.set(0, -angle, 0);
+      dummy.scale.set(0.35 + rng() * 1.1, 0.18 + rng() * 0.5, 0.12);
+      dummy.updateMatrix();
+      windows.setMatrixAt(i, dummy.matrix);
+      color.set(rng() < 0.72 ? "#ffd166" : "#38f7ff");
+      windows.setColorAt(i, color);
+    }
+    windows.instanceMatrix.needsUpdate = true;
+    if (windows.instanceColor) windows.instanceColor.needsUpdate = true;
+    this.root.add(windows);
+    this.horizon = { buildings, windows };
   }
 
   buildGround() {

@@ -2,7 +2,10 @@ import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { SMAAPass } from "three/addons/postprocessing/SMAAPass.js";
+import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { loadAssets, makeCharacter, makeFullCar, makeRemoteCar, tintAsset } from "./assets.js";
 import { AudioEngine } from "./audio.js";
 import { Input } from "./input.js";
@@ -41,10 +44,83 @@ const CHARACTER_OPTIONS = {
   },
 };
 
+const QUALITY_KEY = "monsoon-drift-quality-v1";
+
+const GRAPHICS_PRESETS = {
+  performance: {
+    label: "PERFORMANCE",
+    note: "60fps-first · lower resolution, no bloom/SMAA, lighter rain",
+    maxPixelRatio: 1.0, exposure: 1.08,
+    bloom: 0, bloomRadius: 0.4, bloomThreshold: 0.9,
+    smaa: false, colorGrade: false,
+    saturation: 1.0, contrast: 1.0, vignette: 0.08,
+    shadows: false, rainOpacity: 0.14, envIntensity: 0.45,
+  },
+  balanced: {
+    label: "BALANCED",
+    note: "Default · bloom, clean edges, wet roads, adaptive shadows",
+    maxPixelRatio: 1.5, exposure: 1.22,
+    bloom: 0.62, bloomRadius: 0.50, bloomThreshold: 0.72,
+    smaa: true, colorGrade: true,
+    saturation: 1.08, contrast: 1.05, vignette: 0.18,
+    shadows: true, rainOpacity: 0.24, envIntensity: 0.75,
+  },
+  cinematic: {
+    label: "CINEMATIC",
+    note: "Widescreen horizon · stronger bloom, grade, reflections and rain",
+    maxPixelRatio: 1.8, exposure: 1.30,
+    bloom: 0.86, bloomRadius: 0.62, bloomThreshold: 0.66,
+    smaa: true, colorGrade: true,
+    saturation: 1.14, contrast: 1.10, vignette: 0.25,
+    shadows: true, rainOpacity: 0.30, envIntensity: 1.0,
+  },
+};
+
+const CAMERA_PROFILES = {
+  performance: { distance: 8.6, height: 4.0, fov: 60, lookAhead: 6, menuFov: 58 },
+  balanced: { distance: 9.2, height: 4.2, fov: 62, lookAhead: 7, menuFov: 54 },
+  cinematic: { distance: 10.6, height: 3.45, fov: 70, lookAhead: 11, menuFov: 50 },
+};
+
+const ColorGradeShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    saturation: { value: 1.08 },
+    contrast: { value: 1.05 },
+    vignette: { value: 0.18 },
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform float saturation;
+    uniform float contrast;
+    uniform float vignette;
+    varying vec2 vUv;
+    void main() {
+      vec4 texel = texture2D(tDiffuse, vUv);
+      vec3 color = texel.rgb;
+      float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+      color = mix(vec3(luma), color, saturation);
+      color = (color - 0.5) * contrast + 0.5;
+      float d = distance(vUv, vec2(0.5));
+      color *= 1.0 - smoothstep(0.42, 0.86, d) * vignette;
+      gl_FragColor = vec4(clamp(color, 0.0, 1.0), texel.a);
+    }
+  `,
+};
+
 export class Game {
   constructor() {
     this.canvas = document.getElementById("game-canvas");
     this.isMobile = isTouchDevice() || window.innerWidth < 760;
+    const savedQuality = safeGet(QUALITY_KEY, "balanced");
+    this.qualityPreset = GRAPHICS_PRESETS[savedQuality] ? savedQuality : "balanced";
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas, antialias: !this.isMobile, alpha: false,
       stencil: false, powerPreference: "high-performance",
@@ -66,15 +142,23 @@ export class Game {
       new THREE.Vector2(window.innerWidth, window.innerHeight),
       0.62, 0.50, 0.72,
     );
+    this.smaaPass = new SMAAPass();
+    this.colorGradePass = new ShaderPass(ColorGradeShader);
     this.outputPass = new OutputPass();
 
     this.scene = new THREE.Scene();
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.75;
+    pmrem.dispose();
     this.renderPass.scene = this.scene;
     this.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 600);
     this.camera.position.set(0, 6, -16);
     this.renderPass.camera = this.camera;
     this.composer.addPass(this.renderPass);
     this.composer.addPass(this.bloomPass);
+    this.composer.addPass(this.smaaPass);
+    this.composer.addPass(this.colorGradePass);
     this.composer.addPass(this.outputPass);
     this.composer.setSize(window.innerWidth, window.innerHeight);
     this.clock = new THREE.Clock();
@@ -182,10 +266,14 @@ export class Game {
     this.bindGlobalEvents();
     this.bindInputActions();
     this.ui.setMuteState(this.audio.muted);
+    this.applyQualityPreset();
+    this.ui.updateOrientation();
   }
 
   bindGlobalEvents() {
     window.addEventListener("resize", () => this.resize());
+    window.addEventListener("orientationchange", () => this.ui.updateOrientation());
+    screen.orientation?.addEventListener?.("change", () => this.ui.updateOrientation());
     window.addEventListener("pointerdown", () => this.audio.unlock(), { once: true });
     window.addEventListener("keydown", () => this.audio.unlock(), { once: true });
     window.addEventListener("contextmenu", (event) => event.preventDefault());
@@ -211,6 +299,9 @@ export class Game {
     this.input.onKey("Space", (event) => this.handleConfirm(event));
     this.input.onKey("KeyM", (event) => {
       if (!fromInput(event)) this.toggleMute();
+    });
+    this.input.onKey("KeyF", (event) => {
+      if (!fromInput(event)) this.enterLandscapeMode();
     });
   }
 
@@ -239,6 +330,7 @@ export class Game {
       this.setupCharacterStage();
       this.setupPreviewRenderer();
       this.setCharacter(this.characterId, true);
+      this.applyQualityPreset();
       this.ui.setLoading(0.94, "Warming engines");
       await new Promise((resolve) => setTimeout(resolve, 160));
       this.ui.setLoading(1, "Ready");
@@ -264,6 +356,66 @@ export class Game {
     this.renderer.setSize(width, height, false);
     this.composer.setSize(width, height);
     this.resizePreviewRenderer();
+    this.ui.updateOrientation();
+  }
+
+  applyQualityPreset() {
+    const preset = GRAPHICS_PRESETS[this.qualityPreset] || GRAPHICS_PRESETS.balanced;
+    const cap = preset.maxPixelRatio * (this.isMobile ? 0.85 : 1);
+    const ratio = Math.min(window.devicePixelRatio || 1, cap);
+    this.pixelRatio = ratio;
+    this.renderer.setPixelRatio(ratio);
+    this.composer.setPixelRatio(ratio);
+    this.renderer.toneMappingExposure = preset.exposure;
+    this.bloomPass.strength = preset.bloom;
+    this.bloomPass.radius = preset.bloomRadius;
+    this.bloomPass.threshold = preset.bloomThreshold;
+    this.bloomPass.enabled = preset.bloom > 0;
+    this.smaaPass.enabled = preset.smaa && !this.isMobile;
+    this.colorGradePass.enabled = preset.colorGrade;
+    this.colorGradePass.uniforms.saturation.value = preset.saturation;
+    this.colorGradePass.uniforms.contrast.value = preset.contrast;
+    this.colorGradePass.uniforms.vignette.value = preset.vignette;
+    this.renderer.shadowMap.enabled = preset.shadows && !this.isMobile;
+    if (this.world?.sun) {
+      this.world.sun.castShadow = preset.shadows && !this.isMobile;
+      this.world.sun.intensity = preset.shadows ? 2.35 : 1.75;
+    }
+    if (this.world?.rain) this.world.rain.material.opacity = preset.rainOpacity;
+    this.scene.environmentIntensity = preset.envIntensity;
+    this.qualityReduced = this.qualityPreset === "performance";
+    this.ui.setQuality(this.qualityPreset, preset);
+  }
+
+  setQualityPreset(id) {
+    if (!GRAPHICS_PRESETS[id] || id === this.qualityPreset) return;
+    this.qualityPreset = id;
+    safeSet(QUALITY_KEY, id);
+    this.applyQualityPreset();
+    this.audio.unlock();
+    this.audio.sfx("ui");
+    this.ui.showToast(`${GRAPHICS_PRESETS[id].label} graphics selected`, 1800);
+  }
+
+  async enterLandscapeMode() {
+    this.audio.unlock();
+    this.audio.sfx("ui");
+    try {
+      if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch { /* fullscreen is optional */ }
+    try {
+      if (screen.orientation?.lock) {
+        await screen.orientation.lock("landscape");
+        this.ui.showToast("Landscape / horizontal horizon locked", 2000);
+      } else {
+        this.ui.showToast("Rotate your phone to landscape for the wide horizon view", 2800);
+      }
+    } catch {
+      this.ui.showToast("Auto-lock unsupported — please rotate your device manually", 2800);
+    }
+    this.ui.updateOrientation();
   }
 
   setupCharacterStage() {
@@ -1102,17 +1254,18 @@ export class Game {
 
   updateCamera(dt) {
     const speedRatio = clamp(Math.abs(this.vehicle.speed) / this.vehicle.boostSpeed, 0, 1);
-    const distance = 9 + speedRatio * 3.5;
-    const height = 4.2 + speedRatio * 0.8;
+    const profile = CAMERA_PROFILES[this.qualityPreset] || CAMERA_PROFILES.balanced;
+    const distance = profile.distance + speedRatio * 3.2;
+    const height = profile.height + speedRatio * 0.7;
     this.cameraDesired.copy(this.vehicle.pos)
       .addScaledVector(this.vehicle.forward, -distance)
       .addScaledVector(this.up, height)
       .addScaledVector(this.vehicle.right, -this.vehicle.steer * 0.7);
     this.camera.position.lerp(this.cameraDesired, 1 - Math.exp(-8 * dt));
-    this.lookTarget.copy(this.vehicle.pos).addScaledVector(this.vehicle.forward, 7 + speedRatio * 4);
+    this.lookTarget.copy(this.vehicle.pos).addScaledVector(this.vehicle.forward, profile.lookAhead + speedRatio * 4);
     this.lookTarget.y = 1.2;
     this.camera.lookAt(this.lookTarget);
-    const targetFov = 62 + speedRatio * 12 + (this.vehicle.boosting ? 7 : 0);
+    const targetFov = profile.fov + speedRatio * 10 + (this.vehicle.boosting ? 7 : 0);
     this.camera.fov = damp(this.camera.fov, targetFov, 5, dt);
     this.camera.updateProjectionMatrix();
     const shakeAmount = this.shake + this.vehicle.shake * 0.45;
@@ -1135,7 +1288,8 @@ export class Game {
     );
     this.camera.position.lerp(this.cameraDesired, 1 - Math.exp(-2.5 * dt));
     this.camera.lookAt(this.menuCenter);
-    this.camera.fov = damp(this.camera.fov, 54, 2, dt);
+    const menuProfile = CAMERA_PROFILES[this.qualityPreset] || CAMERA_PROFILES.balanced;
+    this.camera.fov = damp(this.camera.fov, menuProfile.menuFov, 2, dt);
     this.camera.updateProjectionMatrix();
     this.world.update(dt, this.vehicle.pos, { ambient: true, particles: this.particles });
     this.particles.update(dt);
@@ -1187,6 +1341,8 @@ export class Game {
       this.renderer.setPixelRatio(ratio);
       this.composer.setPixelRatio(ratio);
       this.bloomPass.enabled = false;
+      this.smaaPass.enabled = false;
+      this.colorGradePass.enabled = false;
       this.renderer.shadowMap.enabled = false;
       if (this.world?.sun) this.world.sun.castShadow = false;
       this.ui.showToast("Performance mode enabled for smooth 60fps", 2200);
