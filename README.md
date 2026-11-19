@@ -1,6 +1,8 @@
 # Monsoon Drift · Mumbai Chai Rush
 
-An original, India-inspired open-world arcade driving game built for the browser. It takes the freedom and street-energy of a GTA-style city and rebuilds it as a compact, fast, 60fps-friendly monsoon playground with room-code multiplayer.
+An original, India-inspired 3D open-world arcade driving game built for the browser. It takes the street-energy of a GTA-style city and rebuilds it as a cinematic, 60fps-friendly Mumbai-monsoon playground with Blender-authored characters, a live 3D rider preview, rainy streets, neon bloom, room-code multiplayer, and an installable PWA shell.
+
+> This is an original vertical slice, not a copy of GTA VI and not a GPU cloud-streaming service. It is a cloud-hostable WebGL game: once deployed to Render, anyone with the URL can play solo or join Connect Play rooms in their own browser.
 
 ## Play
 
@@ -16,7 +18,7 @@ npm run build
 npm run preview
 ```
 
-The preview server binds to `0.0.0.0:4173` by default and serves both the built game and the `/net` WebSocket endpoint. Set `PORT` to use another port.
+The preview server binds to `0.0.0.0:4173` by default and serves both the built game and the `/net` WebSocket endpoint. Set `PORT` to use another port. On a deployed HTTPS URL, the game is installable as a PWA; an **INSTALL APP** button appears in browsers that support `beforeinstallprompt`.
 
 ## Controls
 
@@ -33,6 +35,7 @@ The preview server binds to `0.0.0.0:4173` by default and serves both the built 
 
 ## Core loop
 
+- Pick one of five Blender-made riders on the start screen; the live 3D preview, hero-car paint and saved selection update instantly.
 - Start moving immediately: the first chai cup and boost pad are placed seconds from spawn.
 - Thread through traffic for near-miss bonuses, chain cups and drifts to build an eight-step combo, and drive through glowing chai gates.
 - Solo gates add nine seconds; Connect Play uses a shared 90-second score-attack clock.
@@ -50,32 +53,40 @@ The same WebSocket server is attached in `vite.config.js` for development and in
 
 ## Blender asset pipeline
 
-The hero car, city cars, auto-rickshaw, temple and chai stall are original low-poly assets authored with Blender's Python API:
+The hero car, city cars, auto-rickshaw, temple and chai stall are original low-poly assets authored with Blender's Python API. The playable cast and city NPCs are also Blender-authored, with separate arm/leg/head pivots for lightweight runtime animation:
 
-- `tools/blender/monsoon_assets.blend` — editable source scene.
-- `tools/blender/make_assets.py` — reproducible generator and glTF exporter.
+- `tools/blender/monsoon_assets.blend` — editable vehicle/landmark source scene.
+- `tools/blender/make_assets.py` — reproducible vehicle/landmark generator and glTF exporter.
+- `tools/blender/monsoon_characters.blend` — editable character source scene.
+- `tools/blender/make_characters.py` — reproducible character generator and glTF exporter.
 - `public/assets/*.glb` — runtime binaries loaded by `GLTFLoader`.
+- `public/icons/` and `tools/make_icons.py` — PWA icon source and generator.
 
 Regenerate them with Blender or the `bpy` Python module:
 
 ```bash
 blender --background --python tools/blender/make_assets.py
-# or
+blender --background --python tools/blender/make_characters.py
+python3 tools/make_icons.py
+# or, with the bpy module:
 PYTHONPATH=/path/to/bpy python3 tools/blender/make_assets.py
+PYTHONPATH=/path/to/bpy python3 tools/blender/make_characters.py
 ```
 
-At runtime, traffic and remote-player vehicles are merged into single vertex-colored meshes to keep draw calls low on mobile. The player car keeps separate wheel meshes for steering and spin animation.
+At runtime, traffic, crowd NPCs and remote-player vehicles are merged into single vertex-colored meshes / instanced draws to keep draw calls low on mobile. The player car keeps separate wheel meshes for steering and spin animation; the menu rider and near-field pedestrians keep their Blender limb pivots.
 
 ## Performance notes
 
-- Instanced buildings, windows, street lights, lane markings, garlands and palms.
-- One shared particle `Points` buffer with additive blending.
-- Capped device pixel ratio, optional shadows, and automatic performance mode if frame times slip.
+- Instanced buildings, windows, street lights, lane markings, garlands, palms, puddles and crowd NPCs.
+- One shared particle `Points` buffer, one rain `LineSegments` buffer, and a cinematic bloom/output post-processing chain.
+- Merged vertex-color geometry for traffic and instanced crowds; only the hero car, menu rider and nearby pedestrians keep detailed node hierarchies.
+- Capped device pixel ratio, optional shadows, and automatic performance mode that disables bloom and lowers resolution if frame times slip.
 - Delta-time clamped physics, no per-frame geometry allocation, and no external texture/font requests.
+- Service worker caches the app shell, icons, JS/CSS and GLBs for faster repeat loads and offline solo play. Connect Play still needs the live `/net` server.
 
 ## Tech
 
-Three.js, Vite, WebAudio, Canvas 2D minimap, `ws` WebSockets, and Blender-generated glTF assets.
+Three.js + post-processing, Vite, WebAudio, Canvas 2D minimap, PWA/service worker, `ws` WebSockets, and Blender-generated glTF assets.
 
 ## Deploy to Render
 
@@ -92,6 +103,6 @@ This branch is ready for a one-click **Render** deployment. The button points at
 - Plan: `free`
 - `PORT` is injected by Render; the server already binds `0.0.0.0` and serves both the game and the `/net` WebSocket endpoint.
 
-Click the button, sign in to Render, connect GitHub, and confirm the service name. The first deploy builds `dist/` and then serves the full game, including **Connect Play** room-code multiplayer, over HTTPS/WSS.
+Click the button, sign in to Render, connect GitHub, and confirm the service name. The first deploy builds `dist/` and then serves the full game, including **Connect Play** room-code multiplayer, over HTTPS/WSS. The HTTPS URL also enables the installable PWA and service-worker cache, so players can add Monsoon Drift to a phone or desktop home screen.
 
 > Render's free web services spin down after inactivity and have a cold start on the next request. For an always-on public multiplayer room, switch the service to a paid Starter plan.

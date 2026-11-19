@@ -4,8 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#090d1e" />
-    <meta name="description" content="Monsoon Drift — an original India-inspired open-world arcade driving game with room-code multiplayer." />
-    <title>Monsoon Drift · Mumbai Chai Rush</title>
+    <meta name="description" content="Monsoon Drift — an original India-inspired 3D open-world arcade driving game with Blender characters and room-code multiplayer." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <title>Monsoon Drift · Mumbai Chai Rush 3D</title>
   </head>
   <body>
     <div id="app">
@@ -112,9 +118,35 @@
               <input id="name-input" type="text" maxlength="14" value="RIDER" autocomplete="off" spellcheck="false" />
             </label>
 
+            <div class="character-select" aria-label="Choose your rider">
+              <div class="character-head">
+                <span class="panel-label">CHOOSE YOUR RIDER</span>
+                <span class="blender-badge">✦ BLENDER 3D CAST</span>
+              </div>
+              <div class="character-grid" id="character-grid">
+                <button class="character-card selected" data-character="ayaan" style="--char-color:#ff9f1c" type="button" aria-pressed="true">
+                  <span class="avatar-dot">A</span><span class="char-name">AYAAN</span><span class="char-role">RACER</span>
+                </button>
+                <button class="character-card" data-character="meera" style="--char-color:#20e3b2" type="button" aria-pressed="false">
+                  <span class="avatar-dot">M</span><span class="char-name">MEERA</span><span class="char-role">COURIER</span>
+                </button>
+                <button class="character-card" data-character="constable" style="--char-color:#dce8ff" type="button" aria-pressed="false">
+                  <span class="avatar-dot">R</span><span class="char-name">RAO</span><span class="char-role">COP</span>
+                </button>
+                <button class="character-card" data-character="chaiwala" style="--char-color:#e07a5f" type="button" aria-pressed="false">
+                  <span class="avatar-dot">C</span><span class="char-name">CHAIWALA</span><span class="char-role">VENDOR</span>
+                </button>
+                <button class="character-card" data-character="pedestrian" style="--char-color:#2ec4b6" type="button" aria-pressed="false">
+                  <span class="avatar-dot">P</span><span class="char-name">CITY WALKER</span><span class="char-role">LOCAL</span>
+                </button>
+              </div>
+              <small id="character-status" class="character-status">Helmet, jacket, full throttle</small>
+            </div>
+
             <div class="menu-actions">
               <button id="start-btn" class="btn primary" type="button"><span>▶</span> SOLO RUN</button>
               <button id="connect-btn" class="btn secondary" type="button"><span>◈</span> CONNECT PLAY</button>
+              <button id="install-btn" class="btn install hidden" type="button"><span>⬇</span> INSTALL APP</button>
             </div>
 
             <div class="controls-card">
@@ -131,6 +163,11 @@
 
           <aside class="menu-side">
             <div class="side-header"><span>LOCAL LEGENDS</span><span class="trophy">✦</span></div>
+            <div class="character-preview-frame" aria-label="Live 3D rider preview">
+              <canvas id="character-canvas" width="320" height="240" aria-hidden="true"></canvas>
+              <span class="preview-badge">LIVE 3D RIDER</span>
+              <span class="preview-sub">BLENDER · GLB</span>
+            </div>
             <table class="score-table">
               <thead><tr><th>#</th><th>RIDER</th><th>SCORE</th></tr></thead>
               <tbody id="start-scores"></tbody>
@@ -138,7 +175,7 @@
             <div class="side-tip"><b>CHAI RUSH</b><span>Gates add time. Drifts, near misses and cups build your combo. Keep it alive.</span></div>
           </aside>
         </div>
-        <div class="screen-footer">GTA-style freedom · Original India-inspired world · Built with Three.js &amp; Blender assets</div>
+        <div class="screen-footer">Original India-inspired 3D open world · Blender-made cast · Three.js rendering · Room-code Connect Play</div>
       </section>
 
       <section id="connect-screen" class="screen hidden" aria-label="Connect Play lobby">

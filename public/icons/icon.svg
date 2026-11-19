@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a1028"/>
+      <stop offset="0.55" stop-color="#241b4a"/>
+      <stop offset="1" stop-color="#5a2b62"/>
+    </linearGradient>
+    <linearGradient id="road" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b2b4a"/>
+      <stop offset="1" stop-color="#07101f"/>
+    </linearGradient>
+    <linearGradient id="car" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffd166"/>
+      <stop offset="1" stop-color="#ff6b35"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="38%" r="50%">
+      <stop offset="0" stop-color="#ffd166" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#ff9f1c" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#02040d" flood-opacity="0.65"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="104" fill="url(#sky)"/>
+  <circle cx="256" cy="190" r="118" fill="url(#glow)"/>
+  <circle cx="256" cy="188" r="58" fill="#ffd166" opacity="0.92"/>
+  <path d="M0 344 C130 302 190 372 256 346 C330 318 392 354 512 316 L512 512 L0 512 Z" fill="url(#road)" opacity="0.92"/>
+  <path d="M158 512 L256 300 L354 512" fill="none" stroke="#20e3b2" stroke-width="7" stroke-opacity="0.5"/>
+  <path d="M192 512 L256 356 L320 512" fill="none" stroke="#ffd166" stroke-width="4" stroke-opacity="0.55" stroke-dasharray="16 16"/>
+  <g filter="url(#shadow)" transform="translate(256 382)">
+    <path d="M-72 18 L-58 -18 Q-54 -32 -38 -34 L38 -34 Q54 -32 58 -18 L72 18 Q74 30 60 32 L-60 32 Q-74 30 -72 18 Z" fill="url(#car)"/>
+    <path d="M-42 -30 L-26 -58 L26 -58 L42 -30 Z" fill="#0b1830" stroke="#7ee8ff" stroke-width="4" stroke-opacity="0.7"/>
+    <rect x="-58" y="8" width="22" height="10" rx="4" fill="#fff3d6" opacity="0.9"/>
+    <rect x="36" y="8" width="22" height="10" rx="4" fill="#ff4d6d" opacity="0.9"/>
+    <circle cx="-46" cy="32" r="15" fill="#0a0f1e" stroke="#20e3b2" stroke-width="5"/>
+    <circle cx="46" cy="32" r="15" fill="#0a0f1e" stroke="#20e3b2" stroke-width="5"/>
+  </g>
+  <text x="256" y="116" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="56" font-weight="900" letter-spacing="6" fill="#fff3d6">MD</text>
+  <text x="256" y="468" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="22" font-weight="800" letter-spacing="5" fill="#20e3b2">MONSOON DRIFT</text>
+</svg>

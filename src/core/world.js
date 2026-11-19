@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { cloneAsset, makeMergedCar } from "./assets.js";
+import { cloneAsset, makeCharacter, makeCrowdMesh, makeMergedCar } from "./assets.js";
 import { TAU, clamp, lerp, mulberry32, randomColor } from "./utils.js";
 
 const ROAD_COORDS = [-102, -68, -34, 0, 34, 68, 102];
@@ -138,6 +138,14 @@ export class World {
     this.gateIndex = 0;
     this.runSeed = seed;
     this.runRng = mulberry32(seed);
+    this.nearCharacters = [];
+    this.crowd = [];
+    this.crowdTime = 0;
+    this.rain = null;
+    this.rainDrops = [];
+    this.rainRng = mulberry32(seed + 9999);
+    this.characterDummy = new THREE.Object3D();
+    this.characterColor = new THREE.Color();
 
     this.createSharedResources();
     this.build();
@@ -154,7 +162,15 @@ export class World {
       building: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.78, metalness: 0.04 }),
       roof: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0.02 }),
       sidewalk: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.86, metalness: 0.02 }),
-      road: new THREE.MeshStandardMaterial({ color: 0x10182c, roughness: 0.26, metalness: 0.2 }),
+      road: new THREE.MeshPhysicalMaterial({
+        color: 0x10182c, roughness: 0.18, metalness: 0.26,
+        clearcoat: 0.65, clearcoatRoughness: 0.22,
+      }),
+      puddle: new THREE.MeshPhysicalMaterial({
+        color: 0x6bb7d6, roughness: 0.06, metalness: 0.48,
+        transparent: true, opacity: 0.22, depthWrite: false,
+        clearcoat: 1, clearcoatRoughness: 0.05,
+      }),
       lane: basic(0xffe8ad, { transparent: true, opacity: 0.62 }),
       window: basic(0xffffff),
       lamp: basic(0xffd89b),
@@ -186,6 +202,7 @@ export class World {
       cupHandle: new THREE.TorusGeometry(0.17, 0.05, 6, 14),
       cupGlow: new THREE.SphereGeometry(0.62, 12, 8),
       pad: new THREE.BoxGeometry(5.2, 0.055, 3.2),
+      puddle: new THREE.CircleGeometry(1, 20),
       streetPole: new THREE.CylinderGeometry(0.07, 0.12, 5.2, 6),
       streetLamp: new THREE.SphereGeometry(0.22, 8, 6),
       tank: new THREE.CylinderGeometry(0.7, 0.7, 1.0, 10),
@@ -199,18 +216,21 @@ export class World {
     this.buildSkyAndLights();
     this.buildGround();
     this.buildRoads();
+    this.buildPuddles();
+    this.buildRain();
     this.buildBlocksAndBuildings();
     this.buildStreetlights();
     this.buildGarlands();
     this.buildPalms();
     this.buildLandmarks();
+    this.buildCharacters();
     this.buildTraffic();
     this.resetRun(this.seed);
   }
 
   buildSkyAndLights() {
-    this.scene.background = new THREE.Color(0x0b1028);
-    this.scene.fog = new THREE.FogExp2(0x151a38, 0.0054);
+    this.scene.background = new THREE.Color(0x0a1024);
+    this.scene.fog = new THREE.FogExp2(0x141b38, 0.0061);
 
     const sky = new THREE.Mesh(
       new THREE.SphereGeometry(420, 32, 18),
@@ -272,11 +292,13 @@ export class World {
   buildGround() {
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(600, 600),
-      new THREE.MeshStandardMaterial({
+      new THREE.MeshPhysicalMaterial({
         map: makeAsphaltTexture(),
         color: 0xffffff,
-        roughness: 0.42,
-        metalness: 0.12,
+        roughness: 0.34,
+        metalness: 0.16,
+        clearcoat: 0.38,
+        clearcoatRoughness: 0.28,
       }),
     );
     ground.rotation.x = -Math.PI / 2;
@@ -353,6 +375,172 @@ export class World {
     crosswalks.instanceMatrix.needsUpdate = true;
     crosswalks.frustumCulled = false;
     this.root.add(crosswalks);
+  }
+
+  buildPuddles() {
+    const rng = mulberry32(this.seed + 3131);
+    const count = window.innerWidth < 760 ? 46 : 96;
+    const dummy = new THREE.Object3D();
+    const puddles = new THREE.InstancedMesh(this.geometries.puddle, this.materials.puddle, count);
+    for (let i = 0; i < count; i++) {
+      const axis = rng() < 0.5 ? "x" : "z";
+      const road = ROAD_COORDS[Math.floor(rng() * ROAD_COORDS.length)];
+      const along = (rng() * 2 - 1) * CITY_SIZE;
+      const side = (rng() * 2 - 1) * (ROAD_WIDTH / 2 - 1.15);
+      if (axis === "z") dummy.position.set(road + side, 0.086, along);
+      else dummy.position.set(along, 0.087, road + side);
+      dummy.rotation.set(-Math.PI / 2, 0, rng() * TAU);
+      dummy.scale.set(0.8 + rng() * 2.6, 0.35 + rng() * 1.25, 1);
+      dummy.updateMatrix();
+      puddles.setMatrixAt(i, dummy.matrix);
+    }
+    puddles.instanceMatrix.needsUpdate = true;
+    puddles.frustumCulled = false;
+    puddles.renderOrder = 1;
+    this.root.add(puddles);
+  }
+
+  buildRain() {
+    const count = window.innerWidth < 760 ? 220 : 520;
+    const positions = new Float32Array(count * 6);
+    const drops = [];
+    for (let i = 0; i < count; i++) {
+      drops.push({
+        x: (this.rainRng() * 2 - 1) * 34,
+        y: 1.5 + this.rainRng() * 13,
+        z: (this.rainRng() * 2 - 1) * 34,
+        speed: 11 + this.rainRng() * 10,
+        length: 0.32 + this.rainRng() * 0.58,
+      });
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 6, 0), 80);
+    const material = new THREE.LineBasicMaterial({
+      color: 0xb7e4ff, transparent: true, opacity: 0.24,
+      blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
+    });
+    const lines = new THREE.LineSegments(geometry, material);
+    lines.frustumCulled = false;
+    lines.renderOrder = 4;
+    const group = new THREE.Group();
+    group.name = "Monsoon rain";
+    group.add(lines);
+    this.root.add(group);
+    this.rain = { group, geometry, positions, drops, material };
+    this.updateRain(0, new THREE.Vector3(0, 0, 0));
+  }
+
+  updateRain(dt, playerPos) {
+    if (!this.rain) return;
+    const { group, geometry, positions, drops } = this.rain;
+    group.position.set(playerPos.x, 0, playerPos.z);
+    const wind = dt * 1.1;
+    for (let i = 0; i < drops.length; i++) {
+      const drop = drops[i];
+      drop.y -= drop.speed * dt;
+      drop.x += wind;
+      if (drop.y < 0.12) {
+        drop.y = 10 + this.rainRng() * 8;
+        drop.x = (this.rainRng() * 2 - 1) * 34;
+        drop.z = (this.rainRng() * 2 - 1) * 34;
+      }
+      const o = i * 6;
+      positions[o] = drop.x;
+      positions[o + 1] = drop.y;
+      positions[o + 2] = drop.z;
+      positions[o + 3] = drop.x + 0.055;
+      positions[o + 4] = drop.y - drop.length;
+      positions[o + 5] = drop.z - 0.018;
+    }
+    geometry.attributes.position.needsUpdate = true;
+  }
+
+  buildCharacters() {
+    const rng = mulberry32(this.seed + 4242);
+    const nearStyles = [
+      { asset: this.assets.charPedestrian, color: "#2ec4b6", count: 4 },
+      { asset: this.assets.charConstable, color: "#dce8ff", count: 2 },
+      { asset: this.assets.charChaiwala, color: "#e07a5f", count: 2 },
+    ];
+    for (const style of nearStyles) {
+      for (let i = 0; i < style.count; i++) {
+        const api = makeCharacter(style.asset, { color: style.color, baseY: 0.02, scale: 1 });
+        const axis = rng() < 0.5 ? "x" : "z";
+        const road = ROAD_COORDS[Math.floor(rng() * ROAD_COORDS.length)];
+        const dir = rng() < 0.5 ? 1 : -1;
+        const t = (rng() * 2 - 1) * CITY_SIZE;
+        const side = ROAD_WIDTH / 2 + 1.15 + rng() * 1.6;
+        const speed = 0.5 + rng() * 0.5;
+        const yaw = axis === "z" ? (dir > 0 ? 0 : Math.PI) : (dir > 0 ? Math.PI / 2 : -Math.PI / 2);
+        api.group.position.set(axis === "z" ? road + dir * side : t, 0.02, axis === "z" ? t : road + dir * side);
+        api.group.rotation.y = yaw;
+        this.root.add(api.group);
+        this.nearCharacters.push({ api, axis, road, dir, t, side, speed, yaw });
+      }
+    }
+
+    const crowdStyles = [this.assets.charPedestrian, this.assets.charMeera, this.assets.charChaiwala];
+    const perStyle = window.innerWidth < 760 ? 8 : 14;
+    for (const asset of crowdStyles) {
+      const mesh = makeCrowdMesh(asset, perStyle, 0xffffff);
+      this.root.add(mesh);
+      const entries = [];
+      for (let i = 0; i < perStyle; i++) {
+        const axis = rng() < 0.5 ? "x" : "z";
+        const road = ROAD_COORDS[Math.floor(rng() * ROAD_COORDS.length)];
+        const dir = rng() < 0.5 ? 1 : -1;
+        const t = (rng() * 2 - 1) * CITY_SIZE;
+        const side = ROAD_WIDTH / 2 + 1.05 + rng() * 2.1;
+        const speed = 0.42 + rng() * 0.62;
+        const scale = 0.82 + rng() * 0.28;
+        const phase = rng() * TAU;
+        const yaw = axis === "z" ? (dir > 0 ? 0 : Math.PI) : (dir > 0 ? Math.PI / 2 : -Math.PI / 2);
+        entries.push({ axis, road, dir, t, side, speed, scale, phase, yaw });
+        this.characterColor.setHSL(0.52 + rng() * 0.18, 0.10, 0.88 + rng() * 0.12);
+        mesh.setColorAt(i, this.characterColor);
+      }
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      this.crowd.push({ mesh, entries });
+    }
+  }
+
+  updateCharacters(dt, playerPos, ambient = false) {
+    this.crowdTime += dt;
+    const limit = CITY_SIZE + 6;
+    for (const npc of this.nearCharacters) {
+      npc.t += npc.dir * npc.speed * dt;
+      if (npc.t > limit) npc.t = -limit;
+      else if (npc.t < -limit) npc.t = limit;
+      const x = npc.axis === "z" ? npc.road + npc.dir * npc.side : npc.t;
+      const z = npc.axis === "z" ? npc.t : npc.road + npc.dir * npc.side;
+      npc.api.update(dt, npc.speed);
+      npc.api.group.position.x = x;
+      npc.api.group.position.z = z;
+      npc.api.group.rotation.y = npc.yaw;
+      const dx = x - playerPos.x;
+      const dz = z - playerPos.z;
+      npc.api.group.visible = ambient || dx * dx + dz * dz < 95 * 95;
+    }
+
+    for (const group of this.crowd) {
+      const { mesh, entries } = group;
+      for (let i = 0; i < entries.length; i++) {
+        const npc = entries[i];
+        npc.t += npc.dir * npc.speed * dt;
+        if (npc.t > limit) npc.t = -limit;
+        else if (npc.t < -limit) npc.t = limit;
+        const x = npc.axis === "z" ? npc.road + npc.dir * npc.side : npc.t;
+        const z = npc.axis === "z" ? npc.t : npc.road + npc.dir * npc.side;
+        const bob = Math.abs(Math.sin(this.crowdTime * 5.2 * npc.speed + npc.phase)) * 0.032;
+        this.characterDummy.position.set(x, 0.02 + bob, z);
+        this.characterDummy.rotation.set(0, npc.yaw + Math.sin(this.crowdTime * 0.7 + npc.phase) * 0.045, 0);
+        this.characterDummy.scale.setScalar(npc.scale);
+        this.characterDummy.updateMatrix();
+        mesh.setMatrixAt(i, this.characterDummy.matrix);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+    }
   }
 
   addCollider(minX, maxX, minZ, maxZ) {
@@ -935,6 +1123,8 @@ export class World {
   update(dt, playerPos, options = {}) {
     this.time += dt;
     this.updateTraffic(dt * (options.ambient ? 0.38 : 1));
+    this.updateCharacters(dt * (options.ambient ? 0.45 : 1), playerPos, !!options.ambient);
+    this.updateRain(dt, playerPos);
 
     if (this.gate && !this.gate.collected) {
       const gate = this.gate;

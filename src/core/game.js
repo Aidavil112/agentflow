@@ -1,5 +1,9 @@
 import * as THREE from "three";
-import { loadAssets, makeFullCar, makeRemoteCar } from "./assets.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { loadAssets, makeCharacter, makeFullCar, makeRemoteCar, tintAsset } from "./assets.js";
 import { AudioEngine } from "./audio.js";
 import { Input } from "./input.js";
 import { NetworkClient } from "./network.js";
@@ -10,8 +14,32 @@ import { Vehicle } from "./vehicle.js";
 import { World } from "./world.js";
 
 const NAME_KEY = "monsoon-drift-name-v1";
+const CHARACTER_KEY = "monsoon-drift-character-v1";
 const COMBO_WINDOW = 4;
 const SOLO_DURATION = 75;
+
+const CHARACTER_OPTIONS = {
+  ayaan: {
+    asset: "charAyaan", color: "#ff9f1c", label: "Ayaan · Street Racer",
+    tag: "Helmet, jacket, full throttle",
+  },
+  meera: {
+    asset: "charMeera", color: "#20e3b2", label: "Meera · Monsoon Courier",
+    tag: "Kurta, dupatta, quick lines",
+  },
+  constable: {
+    asset: "charConstable", color: "#dce8ff", label: "Constable Rao · Traffic Cop",
+    tag: "Reflective vest, city authority",
+  },
+  chaiwala: {
+    asset: "charChaiwala", color: "#e07a5f", label: "Chaiwala · Stall Owner",
+    tag: "Turban, apron, kettle in hand",
+  },
+  pedestrian: {
+    asset: "charPedestrian", color: "#2ec4b6", label: "Pedestrian · Rainy Commute",
+    tag: "Raincoat, umbrella, shopping bag",
+  },
+};
 
 export class Game {
   constructor() {
@@ -26,13 +54,29 @@ export class Game {
     this.renderer.setSize(window.innerWidth, window.innerHeight, false);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.12;
+    this.renderer.toneMappingExposure = 1.22;
     this.renderer.shadowMap.enabled = !this.isMobile;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.setPixelRatio(this.pixelRatio);
+    this.composer.setSize(window.innerWidth, window.innerHeight);
+    this.renderPass = new RenderPass(new THREE.Scene(), new THREE.PerspectiveCamera());
+    this.bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      0.62, 0.50, 0.72,
+    );
+    this.outputPass = new OutputPass();
+
     this.scene = new THREE.Scene();
+    this.renderPass.scene = this.scene;
     this.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 600);
     this.camera.position.set(0, 6, -16);
+    this.renderPass.camera = this.camera;
+    this.composer.addPass(this.renderPass);
+    this.composer.addPass(this.bloomPass);
+    this.composer.addPass(this.outputPass);
+    this.composer.setSize(window.innerWidth, window.innerHeight);
     this.clock = new THREE.Clock();
 
     this.state = "loading";
@@ -48,8 +92,23 @@ export class Game {
     this.ui = new UI(this);
     this.particles = new ParticleSystem(this.scene, this.isMobile ? 430 : 720);
 
+    const savedCharacter = safeGet(CHARACTER_KEY, "ayaan");
+    this.characterId = CHARACTER_OPTIONS[savedCharacter] ? savedCharacter : "ayaan";
+    this.carColor = CHARACTER_OPTIONS[this.characterId].color;
+    this.characterStage = null;
+    this.characterPreview = null;
+    this.characterRing = null;
+    this.previewCanvas = document.getElementById("character-canvas");
+    this.previewRenderer = null;
+    this.previewScene = null;
+    this.previewCamera = null;
+    this.previewModel = null;
+    this.previewRing = null;
+    this.previewAngle = 0;
+
     this.playerName = cleanName(safeGet(NAME_KEY, "RIDER"));
     this.ui.setPlayerName(this.playerName);
+    this.ui.setCharacter(this.characterId, CHARACTER_OPTIONS[this.characterId]);
     this.roomFromUrl = (new URLSearchParams(location.search).get("room") || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
     this.autoJoined = false;
     this.connectStatus = "Not connected";
@@ -71,6 +130,7 @@ export class Game {
     this.hudTimer = 0;
     this.minimapTimer = 0;
     this.menuAngle = 0.7;
+    this.menuRadius = 8.6;
     this.frameAccum = 0;
     this.frameCount = 0;
     this.qualityReduced = false;
@@ -78,7 +138,7 @@ export class Game {
     this.up = new THREE.Vector3(0, 1, 0);
     this.cameraDesired = new THREE.Vector3();
     this.lookTarget = new THREE.Vector3();
-    this.menuCenter = new THREE.Vector3(0, 1.4, 4);
+    this.menuCenter = new THREE.Vector3(0, 1.25, 4);
     this.effectA = new THREE.Vector3();
     this.effectB = new THREE.Vector3();
     this.effectC = new THREE.Vector3();
@@ -172,10 +232,13 @@ export class Game {
       this.assets = assets;
       this.ui.setLoading(0.66, "Sculpting the monsoon skyline");
       this.world = new World(this.scene, assets, 20261119);
-      this.hero = makeFullCar(assets.heroCar, "#ff9f1c");
+      this.hero = makeFullCar(assets.heroCar, this.carColor);
       this.scene.add(this.hero.group);
       this.vehicle = new Vehicle(this.hero, this.world);
       this.vehicle.reset({ x: 0, z: -4, yaw: 0 });
+      this.setupCharacterStage();
+      this.setupPreviewRenderer();
+      this.setCharacter(this.characterId, true);
       this.ui.setLoading(0.94, "Warming engines");
       await new Promise((resolve) => setTimeout(resolve, 160));
       this.ui.setLoading(1, "Ready");
@@ -199,6 +262,168 @@ export class Game {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false);
+    this.composer.setSize(width, height);
+    this.resizePreviewRenderer();
+  }
+
+  setupCharacterStage() {
+    const stage = new THREE.Group();
+    stage.name = "Character Select Stage";
+    stage.position.set(this.menuCenter.x, 0, this.menuCenter.z);
+
+    const pedestalMaterial = new THREE.MeshStandardMaterial({
+      color: 0x182442, roughness: 0.34, metalness: 0.55,
+    });
+    const pedestal = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.28, 1.48, 0.22, 40),
+      pedestalMaterial,
+    );
+    pedestal.position.y = 0.11;
+    pedestal.receiveShadow = true;
+    stage.add(pedestal);
+
+    const ringMaterial = new THREE.MeshBasicMaterial({
+      color: 0x20e3b2, transparent: true, opacity: 0.58,
+      blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
+    });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.36, 0.035, 8, 56), ringMaterial);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.235;
+    stage.add(ring);
+
+    const key = new THREE.PointLight(0xffd6a3, 2.5, 12, 2);
+    key.position.set(2.6, 3.4, 2.8);
+    stage.add(key);
+    const rim = new THREE.PointLight(0x38f7ff, 1.5, 10, 2);
+    rim.position.set(-2.4, 2.2, -1.8);
+    stage.add(rim);
+
+    this.scene.add(stage);
+    this.characterStage = stage;
+    this.characterRing = ring;
+  }
+
+  refreshCharacterPreview(option) {
+    if (!this.assets || !this.characterStage) return;
+    if (this.characterPreview) {
+      const old = this.characterPreview;
+      this.characterStage.remove(old.group);
+      old.model.traverse((child) => {
+        if (!child.isMesh) return;
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        for (const material of materials) material?.dispose?.();
+      });
+    }
+    const asset = this.assets[option.asset] || this.assets.charAyaan;
+    this.characterPreview = makeCharacter(asset, {
+      color: option.color, baseY: 0.24, scale: 1.08,
+    });
+    this.characterPreview.group.rotation.y = 0.55;
+    this.characterStage.add(this.characterPreview.group);
+  }
+
+  setupPreviewRenderer() {
+    if (!this.previewCanvas || this.previewRenderer) return;
+    this.previewRenderer = new THREE.WebGLRenderer({
+      canvas: this.previewCanvas,
+      alpha: false,
+      antialias: true,
+      powerPreference: "low-power",
+    });
+    this.previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    this.previewRenderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.previewRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.previewRenderer.toneMappingExposure = 1.35;
+    this.previewRenderer.shadowMap.enabled = false;
+
+    this.previewScene = new THREE.Scene();
+    this.previewScene.background = new THREE.Color(0x0a1024);
+    this.previewScene.fog = new THREE.FogExp2(0x10183a, 0.045);
+    this.previewCamera = new THREE.PerspectiveCamera(34, 4 / 3, 0.1, 40);
+    this.previewCamera.position.set(1.65, 2.05, 4.35);
+    this.previewCamera.lookAt(0, 1.02, 0);
+
+    this.previewScene.add(new THREE.HemisphereLight(0xbddcff, 0x2b1838, 2.1));
+    const key = new THREE.DirectionalLight(0xffd6a3, 2.5);
+    key.position.set(3, 5, 3);
+    this.previewScene.add(key);
+    const rim = new THREE.PointLight(0x38f7ff, 2.2, 9, 2);
+    rim.position.set(-2.4, 2.3, -1.8);
+    this.previewScene.add(rim);
+
+    const pedestal = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.05, 1.24, 0.18, 40),
+      new THREE.MeshStandardMaterial({ color: 0x17223f, roughness: 0.36, metalness: 0.52 }),
+    );
+    pedestal.position.y = 0.09;
+    this.previewScene.add(pedestal);
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(1.12, 0.028, 8, 56),
+      new THREE.MeshBasicMaterial({
+        color: 0x20e3b2, transparent: true, opacity: 0.62,
+        blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
+      }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.19;
+    this.previewScene.add(ring);
+    this.previewRing = ring;
+    this.resizePreviewRenderer();
+  }
+
+  refreshPreviewRenderer(option) {
+    if (!this.previewRenderer || !this.previewScene || !this.assets) return;
+    if (this.previewModel) {
+      const old = this.previewModel;
+      this.previewScene.remove(old.group);
+      old.model.traverse((child) => {
+        if (!child.isMesh) return;
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        for (const material of materials) material?.dispose?.();
+      });
+    }
+    const asset = this.assets[option.asset] || this.assets.charAyaan;
+    this.previewModel = makeCharacter(asset, {
+      color: option.color, baseY: 0.20, scale: 1.06,
+    });
+    this.previewModel.group.rotation.y = 0.45;
+    this.previewScene.add(this.previewModel.group);
+  }
+
+  resizePreviewRenderer() {
+    if (!this.previewRenderer || !this.previewCanvas || !this.previewCamera) return;
+    const width = Math.max(1, this.previewCanvas.clientWidth || 320);
+    const height = Math.max(1, this.previewCanvas.clientHeight || 240);
+    this.previewRenderer.setSize(width, height, false);
+    this.previewCamera.aspect = width / height;
+    this.previewCamera.updateProjectionMatrix();
+  }
+
+  updatePreviewRenderer(dt) {
+    if (!this.previewRenderer || !this.previewScene || !this.previewCamera) return;
+    if (this.ui.screens.start.classList.contains("hidden")) return;
+    this.previewAngle += dt * 0.35;
+    this.previewModel?.update(dt, 0.36);
+    if (this.previewModel) this.previewModel.group.rotation.y = 0.45 + Math.sin(this.previewAngle) * 0.32;
+    if (this.previewRing) this.previewRing.material.opacity = 0.5 + Math.sin(this.previewAngle * 3) * 0.18;
+    this.previewRenderer.render(this.previewScene, this.previewCamera);
+  }
+
+  setCharacter(id, silent = false) {
+    const key = CHARACTER_OPTIONS[id] ? id : "ayaan";
+    const option = CHARACTER_OPTIONS[key];
+    this.characterId = key;
+    this.carColor = option.color;
+    safeSet(CHARACTER_KEY, key);
+    if (this.hero?.model) tintAsset(this.hero.model, option.color);
+    this.refreshCharacterPreview(option);
+    this.refreshPreviewRenderer(option);
+    this.ui.setCharacter(key, option);
+    if (!silent) {
+      this.audio.unlock();
+      this.audio.sfx("ui");
+      this.ui.showToast(`${option.label} selected`, 1700);
+    }
   }
 
   makeSeed() {
@@ -560,7 +785,7 @@ export class Game {
     else players.push({
       id: this.network.id,
       name: this.playerName,
-      color: "#ff9f1c",
+      color: this.carColor,
       score: Math.round(this.score),
       gates: this.gates,
       host: this.network.isHost(),
@@ -902,19 +1127,27 @@ export class Game {
 
   updateMenu(dt) {
     this.menuAngle += dt * 0.1;
-    const radius = 18;
+    const radius = this.menuRadius;
     this.cameraDesired.set(
       this.menuCenter.x + Math.sin(this.menuAngle) * radius,
-      7.4 + Math.sin(this.menuAngle * 0.7) * 1.1,
+      4.8 + Math.sin(this.menuAngle * 0.7) * 0.8,
       this.menuCenter.z + Math.cos(this.menuAngle) * radius,
     );
     this.camera.position.lerp(this.cameraDesired, 1 - Math.exp(-2.5 * dt));
     this.camera.lookAt(this.menuCenter);
-    this.camera.fov = damp(this.camera.fov, 58, 2, dt);
+    this.camera.fov = damp(this.camera.fov, 54, 2, dt);
     this.camera.updateProjectionMatrix();
     this.world.update(dt, this.vehicle.pos, { ambient: true, particles: this.particles });
     this.particles.update(dt);
     this.updateRemotePlayers(dt);
+    if (this.characterStage) {
+      this.characterStage.rotation.y += dt * 0.22;
+      this.characterPreview?.update(dt, 0.42);
+      if (this.characterRing) {
+        this.characterRing.material.opacity = 0.42 + Math.sin(this.menuAngle * 4) * 0.18;
+      }
+    }
+    this.updatePreviewRenderer(dt);
   }
 
   updateGameoverCamera(dt) {
@@ -949,7 +1182,11 @@ export class Game {
     this.frameCount = 0;
     if (average > 1 / 46) {
       this.qualityReduced = true;
-      this.renderer.setPixelRatio(Math.min(1, window.devicePixelRatio || 1));
+      const ratio = Math.min(1, window.devicePixelRatio || 1);
+      this.pixelRatio = ratio;
+      this.renderer.setPixelRatio(ratio);
+      this.composer.setPixelRatio(ratio);
+      this.bloomPass.enabled = false;
       this.renderer.shadowMap.enabled = false;
       if (this.world?.sun) this.world.sun.castShadow = false;
       this.ui.showToast("Performance mode enabled for smooth 60fps", 2200);
@@ -964,7 +1201,11 @@ export class Game {
     else if (this.state === "countdown" || this.state === "playing") this.updateRun(dt);
     else if (this.state === "paused") this.updateWorldAmbient(dt, false);
     else if (this.state === "gameover") this.updateWorldAmbient(dt, true);
-    this.renderer.render(this.scene, this.camera);
+    if (this.characterStage) {
+      this.characterStage.visible = this.state === "menu" || this.state === "connect";
+    }
+    if (this.qualityReduced) this.renderer.render(this.scene, this.camera);
+    else this.composer.render(dt);
   }
 
   updateRun(dt) {

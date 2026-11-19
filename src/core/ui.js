@@ -61,6 +61,9 @@ export class UI {
       muteBtn: document.getElementById("mute-btn"),
       pauseMuteBtn: document.getElementById("pause-mute-btn"),
       minimap: document.getElementById("minimap"),
+      characterCards: [...document.querySelectorAll(".character-card")],
+      characterStatus: document.getElementById("character-status"),
+      installBtn: document.getElementById("install-btn"),
     };
     this.minimapCtx = this.el.minimap.getContext("2d");
     this.lastCombo = 1;
@@ -68,6 +71,7 @@ export class UI {
     this.toastTimer = null;
     this.goTimer = null;
     this.damageTimer = null;
+    this.deferredInstall = null;
 
     this.bindEvents();
     this.renderHighScores();
@@ -96,6 +100,14 @@ export class UI {
     click("pause-mute-btn", () => g.toggleMute());
     click("restart-btn", () => g.restart());
     click("gameover-menu-btn", () => g.toMenu());
+    click("install-btn", () => this.promptInstall());
+
+    for (const card of this.el.characterCards) {
+      card.addEventListener("click", (event) => {
+        event.preventDefault();
+        g.setCharacter(card.dataset.character);
+      });
+    }
 
     this.el.nameInput.addEventListener("change", () => g.setPlayerName(this.el.nameInput.value));
     this.el.nameInput.addEventListener("input", () => g.setPlayerName(this.el.nameInput.value, false));
@@ -127,6 +139,7 @@ export class UI {
     this.setTouchVisible(false);
     this.hideCountdown();
     this.hideGo();
+    this.game.resizePreviewRenderer?.();
   }
 
   showConnect() {
@@ -203,6 +216,36 @@ export class UI {
 
   setPlayerName(name) {
     this.el.nameInput.value = cleanName(name);
+  }
+
+  setCharacter(id, meta = null) {
+    for (const card of this.el.characterCards) {
+      card.classList.toggle("selected", card.dataset.character === id);
+      card.setAttribute("aria-pressed", card.dataset.character === id ? "true" : "false");
+    }
+    if (this.el.characterStatus && meta?.tag) this.el.characterStatus.textContent = meta.tag;
+  }
+
+  setInstallPrompt(event) {
+    this.deferredInstall = event;
+    this.el.installBtn.classList.remove("hidden");
+  }
+
+  async promptInstall() {
+    if (!this.deferredInstall) {
+      this.showToast("Use your browser's Install App / Add to Home Screen option", 3000);
+      return;
+    }
+    const prompt = this.deferredInstall;
+    this.deferredInstall = null;
+    this.el.installBtn.classList.add("hidden");
+    try {
+      await prompt.prompt();
+      const choice = await prompt.userChoice;
+      if (choice?.outcome === "accepted") this.showToast("Monsoon Drift installed", 1900);
+    } catch {
+      this.showToast("Installation was cancelled", 1800);
+    }
   }
 
   setJoinCode(code) {

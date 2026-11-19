@@ -8,7 +8,14 @@ const MANIFEST = {
   autoRickshaw: "auto_rickshaw.glb",
   temple: "temple.glb",
   chaiStall: "chai_stall.glb",
+  charAyaan: "char_ayaan.glb",
+  charMeera: "char_meera.glb",
+  charConstable: "char_constable.glb",
+  charChaiwala: "char_chaiwala.glb",
+  charPedestrian: "char_pedestrian.glb",
 };
+
+const TAU = Math.PI * 2;
 
 const mergedGeometryCache = new Map();
 const mergedMaterial = new THREE.MeshStandardMaterial({
@@ -197,6 +204,93 @@ export function makeRemoteCar(asset, color, name) {
   return { group, mesh, ring, label };
 }
 
+/** A full, limb-animated Blender character for the menu preview and near-field NPCs. */
+export function makeCharacter(asset, options = {}) {
+  const { color = "#ff9f1c", tint = true, baseY = 0, scale = 1 } = options;
+  const group = new THREE.Group();
+  const model = cloneAsset(asset);
+  if (tint) tintAsset(model, color, "Body_Paint");
+  group.add(model);
+  group.scale.setScalar(scale);
+
+  const limbs = { armL: null, armR: null, legL: null, legR: null, head: null };
+  model.traverse((child) => {
+    if (child.name.endsWith("Arm_L")) limbs.armL = child;
+    else if (child.name.endsWith("Arm_R")) limbs.armR = child;
+    else if (child.name.endsWith("Leg_L")) limbs.legL = child;
+    else if (child.name.endsWith("Leg_R")) limbs.legR = child;
+    else if (child.name.endsWith("Head")) limbs.head = child;
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+
+  const api = {
+    group,
+    model,
+    limbs,
+    baseY,
+    phase: Math.random() * TAU,
+    speed: 1,
+    update(dt, speed = 1) {
+      this.speed = speed;
+      const rate = 5.2 + speed * 1.2;
+      this.phase += dt * rate;
+      const swing = Math.sin(this.phase) * 0.42 * Math.min(speed, 1.5);
+      const sway = Math.cos(this.phase) * 0.06;
+      if (limbs.legL) limbs.legL.rotation.x = -swing;
+      if (limbs.legR) limbs.legR.rotation.x = swing;
+      if (limbs.armL) limbs.armL.rotation.x = swing * 0.72;
+      if (limbs.armR) limbs.armR.rotation.x = -swing * 0.72;
+      if (limbs.head) {
+        limbs.head.rotation.y = Math.sin(this.phase * 0.43) * 0.09;
+        limbs.head.rotation.z = sway * 0.25;
+      }
+      const bob = Math.abs(Math.sin(this.phase * 2)) * 0.028 * Math.min(speed, 1.5);
+      group.position.y = this.baseY + bob;
+      return bob;
+    },
+  };
+  api.update(0, 1);
+  return api;
+}
+
+/** One draw call for an entire crowd, using the same merged vertex-color pipeline as traffic. */
+export function makeCrowdMesh(asset, count, tint = 0xffffff) {
+  const mesh = new THREE.InstancedMesh(getMergedGeometry(asset, tint), mergedMaterial, count);
+  mesh.castShadow = false;
+  mesh.receiveShadow = true;
+  mesh.frustumCulled = false;
+  return mesh;
+}
+
+function makeFallbackCharacter() {
+  const group = new THREE.Group();
+  group.name = "Fallback_Character_Root";
+  const cloth = new THREE.MeshStandardMaterial({ name: "Fallback_Body_Paint", color: 0xff9f1c, roughness: 0.6 });
+  const skin = new THREE.MeshStandardMaterial({ name: "Fallback_Skin", color: 0xc98d63, roughness: 0.7 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.9, 0.34), cloth);
+  body.position.y = 1.1;
+  group.add(body);
+  const head = new THREE.Group();
+  head.name = "Fallback_Head";
+  head.position.set(0, 1.65, 0);
+  const face = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), skin);
+  head.add(face);
+  group.add(head);
+  for (const [name, x] of [["Arm_L", -0.38], ["Arm_R", 0.38], ["Leg_L", -0.16], ["Leg_R", 0.16]]) {
+    const pivot = new THREE.Group();
+    pivot.name = `Fallback_${name}`;
+    pivot.position.set(x, name.startsWith("Arm") ? 1.38 : 0.82, 0);
+    const limb = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, name.startsWith("Arm") ? 0.7 : 0.78, 10), name.startsWith("Arm") ? cloth : skin);
+    limb.position.y = -0.36;
+    pivot.add(limb);
+    group.add(pivot);
+  }
+  return group;
+}
+
 function findWheels(root) {
   const wheels = [];
   root.traverse((child) => {
@@ -332,7 +426,9 @@ export async function loadAssets(onProgress) {
       result[key] = gltf.scene;
     } catch (error) {
       console.warn(`Could not load ${file}; using a procedural fallback.`, error);
-      result[key] = key === "temple" || key === "chaiStall" ? makeFallbackLandmark() : makeFallbackCarAsset();
+      if (key.startsWith("char")) result[key] = makeFallbackCharacter();
+      else if (key === "temple" || key === "chaiStall") result[key] = makeFallbackLandmark();
+      else result[key] = makeFallbackCarAsset();
     }
     loaded += 1;
     onProgress?.(loaded / entries.length, key);
