@@ -1,0 +1,32 @@
+{
+  "name": "monsoon-drift",
+  "version": "1.0.0",
+  "description": "A Mumbai-inspired open-world arcade driving game with room-code multiplayer",
+  "main": "index.js",
+  "scripts": {
+    "test": "npm run build",
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "node server.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Aidavil112/agentflow.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Aidavil112/agentflow/issues"
+  },
+  "homepage": "https://github.com/Aidavil112/agentflow#readme",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "three": "^0.180.0",
+    "ws": "^8.23.0"
+  },
+  "devDependencies": {
+    "vite": "^7.3.8"
+  }
+}
