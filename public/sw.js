@@ -1,5 +1,5 @@
 /* Monsoon Drift offline shell. WebSocket /net and /health are never cached. */
-const CACHE_NAME = "monsoon-drift-v6";
+const CACHE_NAME = "monsoon-drift-v7";
 const CORE_ASSETS = [
   "/",
   "/index.html",
@@ -18,6 +18,7 @@ const CORE_ASSETS = [
   "/assets/char_constable.glb",
   "/assets/char_chaiwala.glb",
   "/assets/char_pedestrian.glb",
+  "/assets/ai_companion.glb",
 ];
 
 self.addEventListener("install", (event) => {

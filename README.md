@@ -1,8 +1,10 @@
 # Monsoon Drift · India City Rush
 
-An original, India-inspired 3D open-world arcade driving game built for the browser. It takes the street-energy of the open-world driving genre and rebuilds it as a cinematic, 60fps-friendly India city playground with four switchable maps — Mumbai, Delhi, Gurugram and India Tour — plus Blender-authored characters, a live 3D rider preview, city-specific weather and landmarks, neon bloom, four graphics presets, a widescreen horizon, landscape play, room-code multiplayer, and an installable PWA shell.
+An original, India-inspired 3D open-world arcade driving game built for the browser. It takes the street-energy of the open-world driving genre and rebuilds it as a cinematic, 60fps-friendly India city playground with four switchable maps — Mumbai, Delhi, Gurugram and India Tour — plus Blender-authored characters, the original SATHI-1 AI co-pilot, a live 3D rider preview, city-specific weather and landmarks, neon bloom, four graphics presets, a widescreen horizon, landscape play, room-code multiplayer, and an installable PWA shell.
 
 > This is an original vertical slice, not a copy of GTA VI and not a GPU cloud-streaming service. No GTA / Rockstar code, assets, maps, characters or proprietary files were reverse-engineered or copied — including for "development purpose". It is a cloud-hostable WebGL game: once deployed to Render, anyone with the URL can play solo or join Connect Play rooms in their own browser.
+
+> The [`kuafuai/andee`](https://github.com/kuafuai/andee) repository was reviewed only as a conceptual reference for a friendly on-device AI agent. It uses Apache-2.0 plus extra conditions: shipping its software/derivatives inside another product needs written authorisation (A.1(d)), and its name/logo/product identity are not licensed (A.3). No Andee source, image, logo, name or exact horned blue-head character is included. SATHI-1 is a separately authored original service drone.
 
 ## Play
 
@@ -62,6 +64,8 @@ The hero car, city cars, auto-rickshaw, temple and chai stall are original low-p
 - `tools/blender/make_assets.py` — reproducible vehicle/landmark generator and glTF exporter.
 - `tools/blender/monsoon_characters.blend` — editable character source scene.
 - `tools/blender/make_characters.py` — reproducible character generator and glTF exporter.
+- `tools/blender/monsoon_companion.blend` — editable SATHI-1 AI co-pilot source scene.
+- `tools/blender/make_companion.py` — reproducible original co-pilot generator and glTF exporter.
 - `public/assets/*.glb` — runtime binaries loaded by `GLTFLoader`.
 - `public/icons/` and `tools/make_icons.py` — PWA icon source and generator.
 
@@ -70,11 +74,15 @@ Regenerate them with Blender or the `bpy` Python module:
 ```bash
 blender --background --python tools/blender/make_assets.py
 blender --background --python tools/blender/make_characters.py
+blender --background --python tools/blender/make_companion.py
 python3 tools/make_icons.py
 # or, with the bpy module:
 PYTHONPATH=/path/to/bpy python3 tools/blender/make_assets.py
 PYTHONPATH=/path/to/bpy python3 tools/blender/make_characters.py
+PYTHONPATH=/path/to/bpy python3 tools/blender/make_companion.py
 ```
+
+`make_companion.py` accepts `SATHI_RENDER=1` to attempt a Workbench preview still; headless sandboxes without real EGL/GL can skip it. The GLB and `.blend` are always generated.
 
 At runtime, traffic, crowd NPCs and remote-player vehicles are merged into single vertex-colored meshes / instanced draws to keep draw calls low on mobile. The player car keeps separate wheel meshes for steering and spin animation; the menu rider and near-field pedestrians keep their Blender limb pivots.
 
@@ -87,6 +95,21 @@ At runtime, traffic, crowd NPCs and remote-player vehicles are merged into singl
 - Four graphics presets: `PERFORMANCE`, `BALANCED`, `CINEMATIC`, `ULTRA`; capped device pixel ratio, optional shadows, city-specific exposure/bloom/grade, and automatic performance mode that disables bloom/SMAA/grade and lowers resolution if frame times slip.
 - Delta-time clamped physics, no per-frame geometry allocation, and no external texture/font requests.
 - Service worker caches the app shell, icons, JS/CSS and GLBs for faster repeat loads and offline solo play. Connect Play still needs the live `/net` server.
+
+## Original AI co-pilot: SATHI-1
+
+`SATHI-1` is a Blender-authored 3D companion that hovers next to the selected rider in the start-screen live preview and on the in-world character stage. It is **not** Andee: no exact blue horned head, round eyes, smile, orange/pink glow, logo, name or code was copied.
+
+| Part | SATHI-1 design |
+| --- | --- |
+| Silhouette | Floating teal service drone, flattened shell, single horizontal visor |
+| Identity | One antenna with glowing tip, three tricolor status bars, two side rotors |
+| Motion | `Sathi_Head`, `Sathi_Rotor_L`, `Sathi_Rotor_R`, `Sathi_Halo` pivots animate hover, scan and rotor spin at runtime |
+| Per-login colour | `Sathi_Body_Paint` is tintable; the companion follows the selected rider / city accent without exporting another GLB |
+| Fallback | `makeFallbackCompanion()` in `src/core/assets.js` keeps the preview working if the GLB fails to load |
+| Files | `tools/blender/make_companion.py`, `tools/blender/monsoon_companion.blend`, `public/assets/ai_companion.glb` |
+
+The companion is loaded through `aiCompanion` in the asset manifest, cached by the service worker, and rendered by `makeCompanion()` in `src/core/assets.js`. It is a decorative co-pilot / login mascot, not an in-game AI agent with device-control permissions.
 
 ## Tech
 

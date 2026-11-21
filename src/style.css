@@ -543,6 +543,7 @@ kbd {
 .character-preview-frame { position: relative; width: 100%; height: 210px; margin-bottom: 18px; border-radius: 18px; overflow: hidden; border: 1px solid rgba(32,227,178,.26); background: radial-gradient(circle at 50% 32%, rgba(32,227,178,.09), rgba(3,7,20,.72) 70%); box-shadow: inset 0 0 34px rgba(32,227,178,.06); }
 #character-canvas { display: block; width: 100%; height: 100%; }
 .preview-badge { position: absolute; top: 10px; left: 10px; font-size: 8px; letter-spacing: .16em; font-weight: 950; color: var(--teal); padding: 5px 8px; border-radius: 99px; background: rgba(3,7,20,.72); border: 1px solid rgba(32,227,178,.3); }
+.preview-companion { position: absolute; bottom: 10px; left: 10px; font-size: 8px; letter-spacing: .12em; font-weight: 950; color: var(--city-accent, #ff9f1c); padding: 5px 8px; border-radius: 99px; background: rgba(3,7,20,.72); border: 1px solid rgba(255,159,28,.34); }
 .preview-sub { position: absolute; bottom: 10px; right: 10px; font-size: 8px; letter-spacing: .14em; color: rgba(255,243,214,.62); font-weight: 900; }
 .side-tip { margin-top: auto; padding: 16px; border-radius: 16px; background: linear-gradient(135deg, rgba(255,159,28,.1), rgba(32,227,178,.06)); border: 1px solid rgba(255,255,255,.1); }
 .side-tip b { display: block; color: var(--gold); font-size: 10px; letter-spacing: .16em; margin-bottom: 7px; }

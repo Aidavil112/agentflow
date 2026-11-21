@@ -13,6 +13,7 @@ const MANIFEST = {
   charConstable: "char_constable.glb",
   charChaiwala: "char_chaiwala.glb",
   charPedestrian: "char_pedestrian.glb",
+  aiCompanion: "ai_companion.glb",
 };
 
 const TAU = Math.PI * 2;
@@ -274,6 +275,118 @@ export function makeCharacter(asset, options = {}) {
   return api;
 }
 
+/** Procedural stand-in if the Blender co-pilot GLB cannot be fetched. */
+function makeFallbackCompanion() {
+  const group = new THREE.Group();
+  group.name = "Fallback_Companion_Root";
+  const bodyMat = new THREE.MeshStandardMaterial({ name: "Sathi_Body_Paint", color: 0x20e3b2, roughness: 0.34, metalness: 0.32 });
+  const shellMat = new THREE.MeshStandardMaterial({ name: "Sathi_Shell", color: 0x12213c, roughness: 0.4, metalness: 0.58 });
+  const glowMat = new THREE.MeshBasicMaterial({ name: "Sathi_Glow", color: 0x8effd7, toneMapped: false });
+
+  const head = new THREE.Group();
+  head.name = "Sathi_Head";
+  head.position.set(0, 0, 0.72);
+  group.add(head);
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(0.56, 20, 14), bodyMat);
+  shell.scale.set(1, 0.82, 1.04);
+  head.add(shell);
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.075, 0.20), shellMat);
+  visor.position.set(0, -0.455, 0.08);
+  head.add(visor);
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.02, 0.045), glowMat);
+  bar.position.set(0, -0.505, 0.08);
+  head.add(bar);
+  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.34, 12), shellMat);
+  antenna.position.set(0, 0.02, 0.60);
+  head.add(antenna);
+
+  for (const [name, x] of [["Sathi_Rotor_L", -0.62], ["Sathi_Rotor_R", 0.62]]) {
+    const rotor = new THREE.Group();
+    rotor.name = name;
+    rotor.position.set(x, 0, 0.70);
+    group.add(rotor);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.21, 0.028, 8, 24), bodyMat);
+    ring.rotation.x = Math.PI / 2;
+    rotor.add(ring);
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), glowMat);
+    rotor.add(core);
+  }
+
+  const halo = new THREE.Group();
+  halo.name = "Sathi_Halo";
+  halo.position.set(0, 0, 0.02);
+  group.add(halo);
+  const haloRing = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.022, 8, 32), glowMat);
+  halo.add(haloRing);
+
+  const thruster = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.34, 16), shellMat);
+  thruster.rotation.x = Math.PI;
+  thruster.position.set(0, 0.04, 0.24);
+  group.add(thruster);
+  return markExternalAsset(group);
+}
+
+/**
+ * Original SATHI-1 AI co-pilot: a hovering service drone authored in Blender.
+ * The tintable shell material is named `Sathi_Body_Paint`, so each city / login
+ * can give the companion its own accent colour without exporting new GLBs.
+ */
+export function makeCompanion(asset, options = {}) {
+  const { color = "#20e3b2", scale = 1, baseY = 0 } = options;
+  const group = new THREE.Group();
+  group.userData.externalAsset = true;
+  const model = cloneAsset(asset);
+  markClonedAsset(model);
+  group.add(model);
+  group.scale.setScalar(scale);
+  group.position.y = baseY;
+
+  const pivots = { head: null, rotorL: null, rotorR: null, halo: null };
+  model.traverse((child) => {
+    if (child.name === "Sathi_Head") pivots.head = child;
+    else if (child.name === "Sathi_Rotor_L") pivots.rotorL = child;
+    else if (child.name === "Sathi_Rotor_R") pivots.rotorR = child;
+    else if (child.name === "Sathi_Halo") pivots.halo = child;
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+
+  const api = {
+    group,
+    model,
+    pivots,
+    baseY,
+    color,
+    phase: Math.random() * TAU,
+    setColor(next) {
+      this.color = next;
+      tintAsset(model, next, "Body_Paint");
+    },
+    update(dt, intensity = 1) {
+      this.phase += dt * (1.6 + intensity * 0.4);
+      const bob = Math.sin(this.phase * 1.7) * 0.055 * intensity;
+      group.position.y = this.baseY + bob;
+      if (pivots.head) {
+        pivots.head.rotation.y = Math.sin(this.phase * 0.8) * 0.20;
+        pivots.head.rotation.z = Math.sin(this.phase * 1.2) * 0.05;
+      }
+      if (pivots.rotorL) pivots.rotorL.rotation.y += dt * 5.2 * intensity;
+      if (pivots.rotorR) pivots.rotorR.rotation.y -= dt * 5.2 * intensity;
+      if (pivots.halo) {
+        pivots.halo.rotation.y += dt * 0.9 * intensity;
+        const pulse = 1 + Math.sin(this.phase * 2.1) * 0.045;
+        pivots.halo.scale.set(pulse, pulse, pulse);
+      }
+      return bob;
+    },
+  };
+  api.setColor(color);
+  api.update(0, 1);
+  return api;
+}
+
 /** One draw call for an entire crowd, using the same merged vertex-color pipeline as traffic. */
 export function makeCrowdMesh(asset, count, tint = 0xffffff) {
   const mesh = new THREE.InstancedMesh(getMergedGeometry(asset, tint), mergedMaterial, count);
@@ -444,7 +557,8 @@ export async function loadAssets(onProgress) {
       result[key] = gltf.scene;
     } catch (error) {
       console.warn(`Could not load ${file}; using a procedural fallback.`, error);
-      if (key.startsWith("char")) result[key] = makeFallbackCharacter();
+      if (key === "aiCompanion") result[key] = makeFallbackCompanion();
+      else if (key.startsWith("char")) result[key] = makeFallbackCharacter();
       else if (key === "temple" || key === "chaiStall") result[key] = makeFallbackLandmark();
       else result[key] = makeFallbackCarAsset();
     }

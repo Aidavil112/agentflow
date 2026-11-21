@@ -6,7 +6,7 @@ import { SMAAPass } from "three/addons/postprocessing/SMAAPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-import { loadAssets, makeCharacter, makeFullCar, makeRemoteCar, tintAsset } from "./assets.js";
+import { loadAssets, makeCharacter, makeCompanion, makeFullCar, makeRemoteCar, tintAsset } from "./assets.js";
 import { AudioEngine } from "./audio.js";
 import { Input } from "./input.js";
 import { NetworkClient } from "./network.js";
@@ -211,6 +211,8 @@ export class Game {
     this.previewModel = null;
     this.previewRing = null;
     this.previewAngle = 0;
+    this.companionStage = null;
+    this.companionPreview = null;
 
     this.playerName = cleanName(safeGet(NAME_KEY, "RIDER"));
     this.ui.setPlayerName(this.playerName);
@@ -468,6 +470,8 @@ export class Game {
     if (!fromNetwork) safeSet(CITY_KEY, key);
     document.documentElement.style.setProperty("--city-accent", city.accent);
     document.title = `Monsoon Drift · ${city.label} · India City Rush 3D`;
+    this.companionStage?.setColor(city.accent);
+    this.companionPreview?.setColor(city.accent);
     if (this.world) {
       this.world.setCity(key);
       this.vehicle.world = this.world;
@@ -543,6 +547,18 @@ export class Game {
     rim.position.set(-2.4, 2.2, -1.8);
     stage.add(rim);
 
+    if (this.assets?.aiCompanion) {
+      this.companionStage = makeCompanion(this.assets.aiCompanion, {
+        color: this.city.accent,
+        scale: 0.58,
+        baseY: 1.62,
+      });
+      this.companionStage.group.position.x = 1.18;
+      this.companionStage.group.position.z = -0.35;
+      this.companionStage.group.rotation.y = -0.45;
+      stage.add(this.companionStage.group);
+    }
+
     this.scene.add(stage);
     this.characterStage = stage;
     this.characterRing = ring;
@@ -613,6 +629,18 @@ export class Game {
     ring.position.y = 0.19;
     this.previewScene.add(ring);
     this.previewRing = ring;
+
+    if (this.assets?.aiCompanion && !this.companionPreview) {
+      this.companionPreview = makeCompanion(this.assets.aiCompanion, {
+        color: this.city.accent,
+        scale: 0.62,
+        baseY: 1.22,
+      });
+      this.companionPreview.group.position.x = -1.05;
+      this.companionPreview.group.position.z = 0.08;
+      this.companionPreview.group.rotation.y = -0.32;
+      this.previewScene.add(this.companionPreview.group);
+    }
     this.resizePreviewRenderer();
   }
 
@@ -650,6 +678,10 @@ export class Game {
     this.previewAngle += dt * 0.35;
     this.previewModel?.update(dt, 0.36);
     if (this.previewModel) this.previewModel.group.rotation.y = 0.45 + Math.sin(this.previewAngle) * 0.32;
+    this.companionPreview?.update(dt, 0.72);
+    if (this.companionPreview) {
+      this.companionPreview.group.rotation.y = -0.32 + Math.sin(this.previewAngle * 0.8) * 0.22;
+    }
     if (this.previewRing) this.previewRing.material.opacity = 0.5 + Math.sin(this.previewAngle * 3) * 0.18;
     this.previewRenderer.render(this.previewScene, this.previewCamera);
   }
@@ -659,6 +691,8 @@ export class Game {
     const option = CHARACTER_OPTIONS[key];
     this.characterId = key;
     this.carColor = option.color;
+    this.companionStage?.setColor(option.color);
+    this.companionPreview?.setColor(option.color);
     safeSet(CHARACTER_KEY, key);
     if (this.hero?.model) tintAsset(this.hero.model, option.color);
     this.refreshCharacterPreview(option);
@@ -1392,6 +1426,8 @@ export class Game {
     if (this.characterStage) {
       this.characterStage.rotation.y += dt * 0.22;
       this.characterPreview?.update(dt, 0.42);
+      this.companionStage?.update(dt, 0.8);
+      if (this.companionStage) this.companionStage.group.rotation.y += dt * 0.35;
       if (this.characterRing) {
         this.characterRing.material.opacity = 0.42 + Math.sin(this.menuAngle * 4) * 0.18;
       }
